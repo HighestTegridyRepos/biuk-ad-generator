@@ -148,6 +148,7 @@ export interface ProductImageLayer {
   url: string                    // product image or cutout URL
   position: { x: number; y: number }
   scale: number                  // 0.1 to 2.0
+  rotation: number               // degrees, -180 to 180
   opacity: number                // 0 to 1
   visible: boolean
 }
@@ -250,6 +251,7 @@ export interface ConceptRequest {
   brandVoice?: string
   productAnalysis?: ProductAnalysis
   creativeResearch?: CreativeResearch
+  skipCache?: boolean
 }
 
 export interface ConceptResponse {
@@ -265,6 +267,7 @@ export interface ImagePromptRequest {
   messageZonePosition: string
   contrastMethod?: ContrastMethod
   visualDirection?: CreativeResearch["visualDirection"]
+  skipCache?: boolean
 }
 
 export interface ImagePromptResponse {
@@ -285,6 +288,7 @@ export interface CopyRequest {
   brandVoice?: string
   copyDirection?: CreativeResearch["copyDirection"]
   productAnalysis?: ProductAnalysis
+  skipCache?: boolean
 }
 
 export interface CopyResponse {

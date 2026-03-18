@@ -3,12 +3,31 @@ import { getAnthropicClient, MODEL } from "@/lib/anthropic"
 import { IMAGE_PROMPT_SYSTEM_PROMPT, buildImagePromptUserPrompt } from "@/lib/prompts"
 import { ImagePromptRequest, ImagePromptResponse } from "@/types/ad"
 import { extractJSON } from "@/lib/parse-json"
+import { hashKey, getCachedPrompts, setCachedPrompts } from "@/lib/cache"
 
 export async function POST(req: NextRequest) {
   try {
     const body: ImagePromptRequest = await req.json()
-    const client = getAnthropicClient()
 
+    // ── Check cache ──────────────────────────────────────────────
+    const conceptHash = hashKey(body.concept.hook, body.concept.mechanism)
+    const cacheKey = hashKey(
+      conceptHash,
+      body.platform,
+      `${body.width}x${body.height}`,
+      body.messageZonePosition,
+      body.contrastMethod
+    )
+
+    if (!body.skipCache) {
+      const cached = await getCachedPrompts(cacheKey)
+      if (cached) {
+        return NextResponse.json({ prompts: cached, fromCache: true })
+      }
+    }
+
+    // ── Generate fresh prompts ───────────────────────────────────
+    const client = getAnthropicClient()
     const userPrompt = buildImagePromptUserPrompt(
       body.concept,
       body.messageZonePosition,
@@ -31,6 +50,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "AI returned an empty response. Try again." }, { status: 502 })
     }
     const parsed: ImagePromptResponse = extractJSON(text)
+
+    // ── Cache ────────────────────────────────────────────────────
+    await setCachedPrompts(cacheKey, conceptHash, body.platform, parsed.prompts).catch(console.warn)
+
     return NextResponse.json(parsed)
   } catch (error) {
     console.error("Image prompt generation error:", error)

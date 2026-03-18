@@ -12,4 +12,15 @@ export function getAnthropicClient() {
   return _client
 }
 
-export const MODEL = "claude-sonnet-4-6"
+/**
+ * Model constants — use HAIKU for everything by default (cheapest).
+ * Swap to SONNET only for calls where quality noticeably suffers.
+ *
+ * Haiku 4.5: ~$0.001/1K input, $0.005/1K output (~10x cheaper than Sonnet)
+ * Sonnet 4.6: ~$0.015/1K input, $0.075/1K output
+ */
+export const HAIKU = "claude-haiku-4-5-20251001"
+export const SONNET = "claude-sonnet-4-6"
+
+// Default model for all calls — start with Haiku, upgrade specific routes if needed
+export const MODEL = HAIKU
