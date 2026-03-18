@@ -143,7 +143,7 @@ export default function UploadPage() {
 
       // Auto-describe the generated image (data URL already has base64)
       const match = (data.imageUrl as string).match(
-        /^data:(image\/\w+);base64,(.+)$/
+        /^data:([^;]+);base64,(.+)$/
       )
       if (match) {
         describeImage(match[2], match[1])

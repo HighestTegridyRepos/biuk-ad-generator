@@ -26,6 +26,30 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // SSRF protection: block internal/private network URLs
+    try {
+      const parsed = new URL(imageUrl)
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return NextResponse.json({ error: "Only http/https URLs are allowed" }, { status: 400 })
+      }
+      const hostname = parsed.hostname.toLowerCase()
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "0.0.0.0" ||
+        hostname.startsWith("10.") ||
+        hostname.startsWith("172.") ||
+        hostname.startsWith("192.168.") ||
+        hostname.startsWith("169.254.") ||
+        hostname.endsWith(".internal") ||
+        hostname.endsWith(".local")
+      ) {
+        return NextResponse.json({ error: "Internal URLs are not allowed" }, { status: 400 })
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid URL" }, { status: 400 })
+    }
+
     // Download the source image
     const imageRes = await fetch(imageUrl, {
       headers: {

@@ -19,6 +19,7 @@ export default function ComposePage() {
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [dragTarget, setDragTarget] = useState<"text" | "product">("text")
+  const [removingBg, setRemovingBg] = useState(false)
 
   // Product image from scraped data
   const productImageUrl = project.brief.productCutoutUrl || project.brief.productHeroUrl
@@ -605,7 +606,7 @@ export default function ComposePage() {
                         className="w-full"
                       />
                     </div>
-                    {project.brief.productCutoutUrl && project.brief.productHeroUrl && (
+                    {project.brief.productCutoutUrl && project.brief.productHeroUrl ? (
                       <div className="flex gap-1">
                         <button
                           onClick={() =>
@@ -638,7 +639,39 @@ export default function ComposePage() {
                           Original
                         </button>
                       </div>
-                    )}
+                    ) : project.brief.productHeroUrl && !project.brief.productCutoutUrl ? (
+                      <button
+                        disabled={removingBg}
+                        onClick={async () => {
+                          setRemovingBg(true)
+                          try {
+                            const res = await fetch("/api/remove-background", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ imageUrl: project.brief.productHeroUrl }),
+                            })
+                            const data = await res.json()
+                            if (res.ok && data.cutoutUrl) {
+                              dispatch({
+                                type: "SET_BRIEF",
+                                payload: { productCutoutUrl: data.cutoutUrl },
+                              })
+                              dispatch({
+                                type: "UPDATE_PRODUCT_IMAGE",
+                                payload: { url: data.cutoutUrl },
+                              })
+                            }
+                          } catch {
+                            // Non-critical — user still has the original
+                          } finally {
+                            setRemovingBg(false)
+                          }
+                        }}
+                        className="w-full rounded border border-zinc-700 px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
+                      >
+                        {removingBg ? "Removing background..." : "Remove Background"}
+                      </button>
+                    ) : null}
                   </>
                 )}
               </div>
