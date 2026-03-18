@@ -128,11 +128,7 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase()
     const ext = cutoutMime.includes("png") ? "png" : "webp"
     const fileName = `cutouts/${uuid()}.${ext}`
-    const buffer = new Uint8Array(
-      atob(cutoutBase64)
-        .split("")
-        .map((c) => c.charCodeAt(0))
-    )
+    const buffer = Buffer.from(cutoutBase64, "base64")
 
     const { error: uploadError } = await supabase.storage
       .from("product-images")
