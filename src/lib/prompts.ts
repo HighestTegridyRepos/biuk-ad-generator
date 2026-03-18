@@ -14,6 +14,7 @@ Rules:
 - Write in the audience's language, not marketing-speak
 - Numbers outperform words ("7 days" not "one week")
 - Avoid puns, yes/no questions, superlatives without proof, and words like "elevate", "transform", "unlock"
+- Rationale must be 1-2 sentences maximum. Be punchy, not academic. Say WHY it works, not a full marketing analysis.
 
 Return your response as JSON matching this exact structure:
 {

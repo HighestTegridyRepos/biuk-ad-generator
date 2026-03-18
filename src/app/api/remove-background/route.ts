@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getGeminiClient, NANO_BANANA_PRO } from "@/lib/gemini"
+import { getGeminiClient, NANO_BANANA_2 } from "@/lib/gemini"
 import { getSupabase } from "@/lib/supabase"
 import { v4 as uuid } from "uuid"
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     const ai = getGeminiClient()
 
     const response = await ai.models.generateContent({
-      model: NANO_BANANA_PRO,
+      model: NANO_BANANA_2,
       contents: [
         {
           role: "user",

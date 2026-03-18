@@ -147,9 +147,12 @@ export default function ImagePromptsPage() {
                   {copiedId === prompt.id ? "Copied!" : "Copy"}
                 </button>
                 <button
-                  onClick={() =>
+                  onClick={() => {
                     dispatch({ type: "SELECT_IMAGE_PROMPT", payload: prompt.id })
-                  }
+                    // Auto-chain: select prompt → navigate to Step 4 → auto-generate
+                    dispatch({ type: "SET_STEP", payload: 4 })
+                    router.push("/create/upload?auto=1")
+                  }}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     project.imagePrompts.selectedPromptId === prompt.id
                       ? "bg-white text-black"
@@ -158,7 +161,7 @@ export default function ImagePromptsPage() {
                 >
                   {project.imagePrompts.selectedPromptId === prompt.id
                     ? "Selected"
-                    : "Select This Prompt"}
+                    : "Select & Generate"}
                 </button>
                 {prompt.isEdited && (
                   <span className="self-center text-xs text-amber-400">Edited</span>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useProject, useDispatch } from "@/lib/store"
 import { ConceptAngle, ConceptResponse, ProductAnalysis, CreativeResearch } from "@/types/ad"
@@ -32,6 +32,44 @@ export default function ConceptPage() {
   const [research, setResearch] = useState<CreativeResearch | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [showManualBrief, setShowManualBrief] = useState(false)
+  // Session gate: hide stale generated content until the user takes action in THIS session
+  const [sessionStarted, setSessionStarted] = useState(false)
+  // Flag to auto-fire concept generation after scrape completes
+  const [pendingConceptGen, setPendingConceptGen] = useState(false)
+  const cutoutPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Clean up cutout polling on unmount
+  useEffect(() => {
+    return () => {
+      if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+    }
+  }, [])
+
+  // Poll for async cutout URL (generated in background by scrape-product)
+  const pollForCutout = useCallback((url: string) => {
+    if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+    let attempts = 0
+    cutoutPollRef.current = setInterval(async () => {
+      attempts++
+      if (attempts > 12) { // 60s max (12 * 5s)
+        if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+        return
+      }
+      try {
+        const res = await fetch("/api/scrape-product", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.product?.cutout_image_url) {
+          dispatch({ type: "SET_BRIEF", payload: { productCutoutUrl: data.product.cutout_image_url } })
+          if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+        }
+      } catch { /* non-blocking */ }
+    }, 5000)
+  }, [dispatch])
 
   const canGenerate = (product?.ai_analysis?.suggestedBrief || project.brief.description.trim().length > 10)
 
@@ -39,6 +77,7 @@ export default function ConceptPage() {
   const analyzeProduct = useCallback(async () => {
     if (!productUrl.trim()) return
 
+    setSessionStarted(true)
     await executeScrape(async () => {
       const res = await fetch("/api/scrape-product", {
         method: "POST",
@@ -83,7 +122,11 @@ export default function ConceptPage() {
           productCutoutUrl: data.product?.cutout_image_url || null,
         },
       })
+
     })
+
+    // Signal that we should auto-generate concepts once state settles
+    setPendingConceptGen(true)
   }, [productUrl, executeScrape, dispatch])
 
   // ── Generate concepts ────────────────────────────────────────────
@@ -113,6 +156,14 @@ export default function ConceptPage() {
       dispatch({ type: "SET_CONCEPT_ANGLES", payload: data.angles })
     })
   }, [project.brief, dispatch, executeGen])
+
+  // Auto-chain: fire concept generation after scrape populates the brief
+  useEffect(() => {
+    if (pendingConceptGen && project.brief.description.trim().length > 10 && !generating) {
+      setPendingConceptGen(false)
+      generateConcepts()
+    }
+  }, [pendingConceptGen, project.brief.description, generating, generateConcepts])
 
   const selectAngle = (angle: ConceptAngle) => {
     dispatch({ type: "SELECT_CONCEPT", payload: angle.id })
@@ -375,7 +426,7 @@ export default function ConceptPage() {
       {/* ── Manual brief toggle (no product URL) ───────────────── */}
       {!product && !showManualBrief && (
         <button
-          onClick={() => setShowManualBrief(true)}
+          onClick={() => { setShowManualBrief(true); setSessionStarted(true) }}
           className="mt-6 text-sm text-zinc-500 transition-colors hover:text-zinc-300"
         >
           Or write a brief manually without a product URL →
@@ -396,8 +447,8 @@ export default function ConceptPage() {
         </div>
       )}
 
-      {/* ── Concept Angles ─────────────────────────────────────── */}
-      {project.concept.angles.length > 0 && (
+      {/* ── Concept Angles (only show if session is active) ───── */}
+      {sessionStarted && project.concept.angles.length > 0 && (
         <div className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pick a Concept Angle</h2>
@@ -436,7 +487,7 @@ export default function ConceptPage() {
       )}
 
       {/* ── Next Step ──────────────────────────────────────────── */}
-      {project.concept.selectedAngleId && (
+      {sessionStarted && project.concept.selectedAngleId && (
         <div className="mt-8 flex justify-end">
           <button
             onClick={proceed}

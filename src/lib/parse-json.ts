@@ -14,8 +14,9 @@ export function extractJSON<T = unknown>(text: string): T {
     cleaned = fenceMatch[1].trim()
   }
 
-  // Find the first { and use balanced-brace matching to find its closing }
-  const start = cleaned.indexOf("{")
+  // Find the outermost JSON object using balanced-brace matching
+  // (greedy regex /\{[\s\S]*\}/ can match across multiple objects)
+  const start = cleaned.indexOf('{')
   if (start === -1) {
     throw new Error("No JSON object found in response")
   }

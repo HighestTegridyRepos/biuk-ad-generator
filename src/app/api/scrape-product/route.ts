@@ -139,9 +139,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Background removal is handled on-demand via /api/remove-background
-    // (uses Gemini Nano Banana Pro, no extra API key needed).
-    // The user triggers it from the Compose step when they want a cutout.
+    // Fire-and-forget: auto-generate product cutout using Gemini NB2
+    if (product?.id && extracted.heroImage) {
+      generateCutoutAsync(extracted.heroImage, product.id).catch(console.warn)
+    }
 
     return NextResponse.json({
       product: product || productData,
@@ -464,4 +465,74 @@ function buildResearchPrompt(
   prompt += `\n\nProvide your creative research as JSON.`
 
   return prompt
+}
+
+// ── Auto background removal (fire-and-forget after scrape) ────────
+
+async function generateCutoutAsync(imageUrl: string, productId: string) {
+  try {
+    const { getGeminiClient, NANO_BANANA_2 } = await import("@/lib/gemini")
+    const { v4: uuidV4 } = await import("uuid")
+
+    // Download the source image
+    const imageRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!imageRes.ok) return
+
+    const blob = await imageRes.blob()
+    const base64 = Buffer.from(await blob.arrayBuffer()).toString("base64")
+    const mime = blob.type || "image/jpeg"
+
+    // Gemini NB2 background removal — fast + good quality for cutouts
+    const ai = getGeminiClient()
+    const response = await ai.models.generateContent({
+      model: NANO_BANANA_2,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: mime, data: base64 } },
+            {
+              text: "Remove the background from this product image completely. Return ONLY the product on a fully transparent background with clean, precise edges. No shadow, no reflection, no background elements whatsoever. The cutout should look professional and ready to composite onto any background.",
+            },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ["IMAGE"],
+      },
+    })
+
+    // Extract cutout image
+    const cutoutBase64 = response.candidates?.[0]?.content?.parts
+      ?.find((p: { inlineData?: { data?: string } }) => p.inlineData)?.inlineData?.data
+    if (!cutoutBase64) return
+
+    // Upload to Supabase Storage
+    const supabase = getSupabase()
+    const fileName = `cutouts/${uuidV4()}.png`
+    const buffer = Buffer.from(cutoutBase64, "base64")
+
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, buffer, { contentType: "image/png" })
+    if (error) {
+      console.error("Cutout upload error:", error)
+      return
+    }
+
+    const { data } = supabase.storage.from("product-images").getPublicUrl(fileName)
+
+    // Update the products row with the cutout URL
+    await supabase
+      .from("products")
+      .update({ cutout_image_url: data.publicUrl })
+      .eq("id", productId)
+
+    console.log(`Auto-cutout generated and cached: ${data.publicUrl}`)
+  } catch (err) {
+    console.warn("Auto-cutout generation failed (non-blocking):", err)
+  }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useProject, useDispatch } from "@/lib/store"
 import { getMessageZonePosition } from "@/lib/layout-templates"
 import { CopyVariation, CopyResponse } from "@/types/ad"
@@ -17,11 +17,13 @@ export default function CopyPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { loading, error, elapsed, execute, clearError } = useApiCall()
   const [imageDescription, setImageDescription] = useState(
     project.uploadedImage.aiDescription || ""
   )
   const [userEdited, setUserEdited] = useState(false)
+  const autoFired = useRef(false)
 
   // Sync aiDescription into the textarea when it arrives from Step 4,
   // but only if the user hasn't manually edited it yet
@@ -88,6 +90,22 @@ export default function CopyPage() {
     dispatch,
     execute,
   ])
+
+  // Auto-fire copy generation when page loads with all prerequisites
+  // (coming from auto-chain or when imageDescription just arrived)
+  useEffect(() => {
+    const shouldAutoFire =
+      !autoFired.current &&
+      !loading &&
+      project.copy.variations.length === 0 &&
+      selectedConcept &&
+      imageDescription.trim().length > 0
+
+    if (shouldAutoFire) {
+      autoFired.current = true
+      generateCopy()
+    }
+  }, [imageDescription, selectedConcept, loading, project.copy.variations.length, generateCopy])
 
   const selectCopy = (variation: CopyVariation) => {
     dispatch({

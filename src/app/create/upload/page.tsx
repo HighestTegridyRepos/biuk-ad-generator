@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useCallback, useRef, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useProject, useDispatch } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
 import { useApiCall } from "@/hooks/useApiCall"
@@ -31,12 +31,14 @@ export default function UploadPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { loading: generating, error: genError, elapsed, execute, clearError } = useApiCall()
 
   const [dragging, setDragging] = useState(false)
   const [mode, setMode] = useState<"generate" | "upload">("generate")
   const [describing, setDescribing] = useState(false)
   const describeAbortRef = useRef<AbortController | null>(null)
+  const autoFired = useRef(false)
   // Track the latest image URL in a ref so describeImage never uses a stale closure
   const latestImageUrlRef = useRef(project.uploadedImage.url)
   latestImageUrlRef.current = project.uploadedImage.url
@@ -120,6 +122,31 @@ export default function UploadPage() {
     if (file) handleFile(file)
   }
 
+  // Auto-fire image generation when arriving from "Select & Generate" (Step 3)
+  useEffect(() => {
+    if (searchParams.get("auto") === "1" && selectedPrompt && !autoFired.current && !generating && !project.uploadedImage.url) {
+      autoFired.current = true
+      handleGenerateRef.current()
+    }
+  }, [searchParams, selectedPrompt, generating, project.uploadedImage.url])
+
+  // Auto-advance to Step 5 after image is generated AND description is ready
+  useEffect(() => {
+    if (
+      project.uploadedImage.url &&
+      project.uploadedImage.aiDescription &&
+      !describing &&
+      !generating &&
+      autoFired.current
+    ) {
+      dispatch({ type: "SET_STEP", payload: 5 })
+      router.push("/create/copy?auto=1")
+    }
+  }, [project.uploadedImage.url, project.uploadedImage.aiDescription, describing, generating, dispatch, router])
+
+  // Ref for handleGenerate so the auto-fire effect can call it
+  const handleGenerateRef = useRef<() => void>(() => {})
+
   const handleGenerate = async () => {
     if (!selectedPrompt) return
 
@@ -150,6 +177,8 @@ export default function UploadPage() {
       }
     })
   }
+
+  handleGenerateRef.current = handleGenerate
 
   const proceed = () => {
     dispatch({ type: "SET_STEP", payload: 5 })
