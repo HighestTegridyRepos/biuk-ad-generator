@@ -35,7 +35,8 @@ export function buildConceptUserPrompt(
   campaignGoal?: string,
   brandVoice?: string,
   productAnalysis?: ProductAnalysis,
-  creativeResearch?: CreativeResearch
+  creativeResearch?: CreativeResearch,
+  feedback?: string
 ): string {
   let prompt = `Client Brief:\n${brief}\n`
 
@@ -100,6 +101,14 @@ export function buildConceptUserPrompt(
     prompt += `\n\nGenerate concept angles that share these PRINCIPLES without copying the surface appearance. The new ads should feel like they belong in the same family as the references.`
   }
 
+  if (feedback) {
+    prompt += `\n\n--- USER FEEDBACK ON PREVIOUS RESULTS ---
+The user reviewed the last set of concepts and wasn't satisfied. Here's their feedback:
+"${feedback}"
+
+IMPORTANT: Use this feedback to course-correct. Generate concepts that ACTIVELY AVOID whatever the user complained about. Take a meaningfully different creative direction this time.`
+  }
+
   prompt += `\n\nUsing ALL of the above context, generate 3 concept angles as JSON. Each hook must reference SPECIFIC product details — not generic benefits. The concepts should feel like they came from a strategist who deeply researched this product.`
   return prompt
 }
@@ -151,7 +160,8 @@ export function buildImagePromptUserPrompt(
   width: number,
   height: number,
   contrastMethod?: string,
-  visualDirection?: CreativeResearch["visualDirection"]
+  visualDirection?: CreativeResearch["visualDirection"],
+  feedback?: string
 ): string {
   const aspectRatio = width === height ? "1:1" : width > height ? `${width}:${height}` : `${height}:${width} (portrait)`
 
@@ -195,6 +205,14 @@ CRITICAL: The ${messageZonePosition} must be a clean, low-detail area suitable f
       prompt += `\nAVOID these visual clichés: ${visualDirection.avoidPatterns.join(", ")}`
     }
     prompt += `\nUse this direction to inform the mood, palette, and subject matter — but interpret it creatively, don't just list the keywords.`
+  }
+
+  if (feedback) {
+    prompt += `\n\n--- USER FEEDBACK ON PREVIOUS RESULTS ---
+The user reviewed the last set of image prompts and wasn't satisfied:
+"${feedback}"
+
+IMPORTANT: Take this feedback seriously. Generate prompts that go in a COMPLETELY DIFFERENT visual direction. Avoid repeating whatever the user found lacking.`
   }
 
   prompt += `\n\nGenerate 3 image prompts as JSON. Remember: absolutely NO text, logos, or typography rendered in the image.`
@@ -247,7 +265,8 @@ export function buildCopyUserPrompt(
   campaignGoal?: string,
   brandVoice?: string,
   copyDirection?: CreativeResearch["copyDirection"],
-  productAnalysis?: ProductAnalysis
+  productAnalysis?: ProductAnalysis,
+  feedback?: string
 ): string {
   let prompt = `Concept angle: "${concept.hook}" (${concept.mechanism})
 
@@ -300,6 +319,14 @@ The headline will appear in the ${messageZonePosition} of the image.`
     if (productAnalysis.purchaseBarrier) {
       prompt += `\nBarrier to address: ${productAnalysis.purchaseBarrier}`
     }
+  }
+
+  if (feedback) {
+    prompt += `\n\n--- USER FEEDBACK ON PREVIOUS RESULTS ---
+The user reviewed the last set of headlines and wasn't satisfied:
+"${feedback}"
+
+IMPORTANT: Use this feedback to write COMPLETELY DIFFERENT copy. Avoid whatever the user found lacking. Take a fresh creative angle.`
   }
 
   prompt += `\n\nWrite copy that complements the image — don't describe what the viewer can already see. Instead, speak to the desire or pain that the image activates. Use SPECIFIC product details in your headlines, not generic benefits.\n\nGenerate 3 headline variations with CTAs as JSON.`

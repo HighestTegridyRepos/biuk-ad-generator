@@ -23,6 +23,8 @@ export default function CopyPage() {
     project.uploadedImage.aiDescription || ""
   )
   const [userEdited, setUserEdited] = useState(false)
+  const [feedback, setFeedback] = useState("")
+  const [showFeedback, setShowFeedback] = useState(false)
   const autoFired = useRef(false)
 
   // Sync aiDescription into the textarea when it arrives from Step 4,
@@ -49,7 +51,7 @@ export default function CopyPage() {
     project.format.height
   )
 
-  const generateCopy = useCallback(async (skipCache = false) => {
+  const generateCopy = useCallback(async (skipCache = false, userFeedback?: string) => {
     if (!selectedConcept) return
     if (!imageDescription) {
       return
@@ -70,6 +72,7 @@ export default function CopyPage() {
           copyDirection: project.brief.creativeResearch?.copyDirection,
           productAnalysis: project.brief.productAnalysis,
           skipCache,
+          feedback: userFeedback || undefined,
         }),
       })
       if (!res.ok) {
@@ -108,14 +111,10 @@ export default function CopyPage() {
     }
   }, [imageDescription, selectedConcept, loading, project.copy.variations.length, generateCopy])
 
-  const selectCopy = (variation: CopyVariation) => {
+  const toggleCopy = (variation: CopyVariation) => {
     dispatch({
-      type: "SELECT_COPY",
-      payload: {
-        headline: variation.headline,
-        subhead: variation.subhead,
-        cta: variation.cta,
-      },
+      type: "TOGGLE_BATCH_COPY",
+      payload: variation,
     })
   }
 
@@ -130,7 +129,7 @@ export default function CopyPage() {
       <h1 className="text-2xl font-bold">Step 5: Headline Copy</h1>
       <p className="mt-1 text-sm text-zinc-400">
         AI analyzed your image automatically. Review the description below,
-        edit if needed, then generate headlines.
+        edit if needed, then generate headlines. Pick 2 for your 2x2 batch.
       </p>
 
       {/* Image Preview + Description */}
@@ -178,13 +177,13 @@ export default function CopyPage() {
 
       <div className="mt-6">
         <button
-          onClick={generateCopy}
+          onClick={() => generateCopy(true)}
           disabled={loading || !selectedConcept || !imageDescription}
           className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           Generate Headlines
         </button>
-        {error && <ErrorBanner error={error} onRetry={generateCopy} onDismiss={clearError} />}
+        {error && <ErrorBanner error={error} onRetry={() => generateCopy(true)} onDismiss={clearError} />}
       </div>
 
       {/* Copy Variations */}
@@ -192,42 +191,73 @@ export default function CopyPage() {
         <div className="mt-8 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pick Your Copy</h2>
-            <button
-              onClick={generateCopy}
-              disabled={loading}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
-            >
-              {loading ? "Regenerating..." : "Regenerate"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFeedback(!showFeedback)}
+                className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+              >
+                {showFeedback ? "Hide feedback" : "Not quite right?"}
+              </button>
+              <button
+                onClick={() => {
+                  generateCopy(true, feedback || undefined)
+                  setFeedback("")
+                  setShowFeedback(false)
+                }}
+                disabled={loading}
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
+              >
+                {loading ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
           </div>
+          {showFeedback && (
+            <div className="mt-2">
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="What didn't work? e.g. 'too long, need punchier 2-word headlines' or 'too generic, reference specific product benefits'"
+                rows={2}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none"
+              />
+              <p className="mt-1 text-[10px] text-zinc-600">AI will use this to course-correct the next batch</p>
+            </div>
+          )}
           {project.copy.variations.map((variation) => {
             const hw = wordCount(variation.headline)
             const cw = wordCount(variation.cta)
-            const isSelected =
-              project.copy.selected?.headline === variation.headline
+            const batchIdx = project.batch.copies.findIndex((c) => c.id === variation.id)
+            const isSelected = batchIdx >= 0
 
             return (
               <button
                 key={variation.id}
-                onClick={() => selectCopy(variation)}
+                onClick={() => toggleCopy(variation)}
                 className={`w-full rounded-lg border p-5 text-left transition-colors ${
                   isSelected
-                    ? "border-white bg-zinc-800"
+                    ? "border-[var(--accent)] bg-zinc-800"
                     : "border-zinc-700 bg-zinc-900 hover:border-zinc-500"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-xl font-bold text-white">
-                      {variation.headline}
-                    </p>
-                    {variation.subhead && (
-                      <p className="mt-1 text-sm text-zinc-300">
-                        {variation.subhead}
-                      </p>
+                  <div className="flex items-start gap-3 flex-1">
+                    {isSelected && (
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
+                        {batchIdx + 1}
+                      </div>
                     )}
-                    <div className="mt-3 inline-block rounded-md bg-zinc-700 px-3 py-1 text-sm font-semibold text-white">
-                      {variation.cta}
+                    <div className="flex-1">
+                      <p className="text-xl font-bold text-white">
+                        {variation.headline}
+                      </p>
+                      {variation.subhead && (
+                        <p className="mt-1 text-sm text-zinc-300">
+                          {variation.subhead}
+                        </p>
+                      )}
+                      <div className="mt-3 inline-block rounded-md bg-zinc-700 px-3 py-1 text-sm font-semibold text-white">
+                        {variation.cta}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -249,6 +279,11 @@ export default function CopyPage() {
               </button>
             )
           })}
+          {project.batch.copies.length > 0 && project.batch.copies.length < 2 && (
+            <p className="text-center text-sm text-amber-400">
+              Pick 1 more headline for your 2x2 batch
+            </p>
+          )}
         </div>
       )}
 
@@ -262,10 +297,10 @@ export default function CopyPage() {
         </button>
         <button
           onClick={proceed}
-          disabled={!project.copy.selected}
+          disabled={project.batch.copies.length < 2}
           className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Next: Compose &rarr;
+          Next: Compose ({project.batch.copies.length}/2 headlines) &rarr;
         </button>
       </div>
     </div>

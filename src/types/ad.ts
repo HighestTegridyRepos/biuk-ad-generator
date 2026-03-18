@@ -170,6 +170,7 @@ export interface AdProject {
     constraints?: string
     productAnalysis?: ProductAnalysis
     creativeResearch?: CreativeResearch
+    productId?: string | null       // Supabase products row ID (for cache lookups)
     productImages?: string[]       // all scraped product image URLs
     productHeroUrl?: string | null // hero image from scrape
     productCutoutUrl?: string | null // background-removed cutout
@@ -237,6 +238,11 @@ export interface AdProject {
     }>
   }
 
+  batch: {
+    images: Array<{ url: string; aiDescription?: string }>   // max 2
+    copies: CopyVariation[]                                   // max 2
+  }
+
   export: {
     pngUrl: string | null
     renderedAt: string | null
@@ -254,6 +260,7 @@ export interface ConceptRequest {
   productAnalysis?: ProductAnalysis
   creativeResearch?: CreativeResearch
   skipCache?: boolean
+  feedback?: string
 }
 
 export interface ConceptResponse {
@@ -270,6 +277,7 @@ export interface ImagePromptRequest {
   contrastMethod?: ContrastMethod
   visualDirection?: CreativeResearch["visualDirection"]
   skipCache?: boolean
+  feedback?: string
 }
 
 export interface ImagePromptResponse {
@@ -293,6 +301,7 @@ export interface CopyRequest {
   copyDirection?: CreativeResearch["copyDirection"]
   productAnalysis?: ProductAnalysis
   skipCache?: boolean
+  feedback?: string
 }
 
 export interface CopyResponse {

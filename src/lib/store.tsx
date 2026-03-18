@@ -3,6 +3,11 @@
 import { createContext, useContext, useReducer, useEffect, useState, useRef, ReactNode, Dispatch, useCallback } from "react"
 import { v4 as uuid } from "uuid"
 import { AdProject, ConceptAngle, CopyVariation, Platform, Rect, ContrastMethod, CTAStyle, GradientConfig, ProductAnalysis, CreativeResearch, ProductImageLayer } from "@/types/ad"
+
+// Batch image keys for IndexedDB
+function batchImgKey(index: number) {
+  return `img-batch-${index}`
+}
 import { platformSpecs } from "@/lib/platforms"
 import { saveImage, loadImage, clearImages } from "@/lib/image-store"
 
@@ -82,6 +87,11 @@ function createDefaultProject(): AdProject {
       supportElements: [],
     },
 
+    batch: {
+      images: [],
+      copies: [],
+    },
+
     export: {
       pngUrl: null,
       renderedAt: null,
@@ -110,6 +120,14 @@ function saveToLocalStorage(state: AdProject) {
         referenceImages: state.brief.referenceImages.map((url) =>
           url ? "__IDB_REF__" : ""
         ),
+      },
+      batch: {
+        ...state.batch,
+        // Replace batch image URLs with markers
+        images: state.batch.images.map((img) => ({
+          ...img,
+          url: img.url ? "__IDB_BATCH__" : "",
+        })),
       },
       export: {
         ...state.export,
@@ -155,12 +173,16 @@ type Action =
   | { type: "SET_OVERLAY_GRADIENT"; payload: GradientConfig | undefined }
   | { type: "SET_PRODUCT_IMAGE"; payload: ProductImageLayer | undefined }
   | { type: "UPDATE_PRODUCT_IMAGE"; payload: Partial<ProductImageLayer> }
+  | { type: "TOGGLE_BATCH_IMAGE"; payload: { url: string; aiDescription?: string } }
+  | { type: "CLEAR_BATCH_IMAGES" }
+  | { type: "TOGGLE_BATCH_COPY"; payload: CopyVariation }
+  | { type: "CLEAR_BATCH_COPIES" }
   | { type: "SET_EXPORT_URL"; payload: string }
   | { type: "SET_STEP"; payload: 1 | 2 | 3 | 4 | 5 | 6 | 7 }
   | { type: "RESET" }
   | { type: "UNDO"; payload: AdProject }
   | { type: "REDO"; payload: AdProject }
-  | { type: "_HYDRATE_IMAGES"; payload: { uploadedUrl?: string | null; exportUrl?: string | null; referenceImages?: string[] } }
+  | { type: "_HYDRATE_IMAGES"; payload: { uploadedUrl?: string | null; exportUrl?: string | null; referenceImages?: string[]; batchImageUrls?: (string | null)[] } }
 
 function reducer(state: AdProject, action: Action): AdProject {
   const updated = { ...state, updatedAt: new Date().toISOString() }
@@ -297,6 +319,67 @@ function reducer(state: AdProject, action: Action): AdProject {
       }
     }
 
+    case "TOGGLE_BATCH_IMAGE": {
+      const existing = updated.batch.images
+      const idx = existing.findIndex((i) => i.url === action.payload.url)
+      let nextImages: typeof existing
+      if (idx >= 0) {
+        // Remove it
+        nextImages = existing.filter((_, i) => i !== idx)
+      } else if (existing.length >= 2) {
+        // Replace oldest
+        nextImages = [existing[1], action.payload]
+      } else {
+        nextImages = [...existing, action.payload]
+      }
+      // Also set uploadedImage to the first batch image for compose compat
+      const primary = nextImages[0]
+      return {
+        ...updated,
+        batch: { ...updated.batch, images: nextImages },
+        uploadedImage: primary
+          ? { url: primary.url, aiDescription: primary.aiDescription }
+          : { url: null },
+      }
+    }
+
+    case "CLEAR_BATCH_IMAGES":
+      return {
+        ...updated,
+        batch: { ...updated.batch, images: [] },
+      }
+
+    case "TOGGLE_BATCH_COPY": {
+      const existing = updated.batch.copies
+      const idx = existing.findIndex((c) => c.id === action.payload.id)
+      let nextCopies: typeof existing
+      if (idx >= 0) {
+        nextCopies = existing.filter((_, i) => i !== idx)
+      } else if (existing.length >= 2) {
+        nextCopies = [existing[1], action.payload]
+      } else {
+        nextCopies = [...existing, action.payload]
+      }
+      // Also set copy.selected to the first batch copy for compose compat
+      const primaryCopy = nextCopies[0]
+      return {
+        ...updated,
+        batch: { ...updated.batch, copies: nextCopies },
+        copy: {
+          ...updated.copy,
+          selected: primaryCopy
+            ? { headline: primaryCopy.headline, subhead: primaryCopy.subhead, cta: primaryCopy.cta }
+            : null,
+        },
+      }
+    }
+
+    case "CLEAR_BATCH_COPIES":
+      return {
+        ...updated,
+        batch: { ...updated.batch, copies: [] },
+      }
+
     case "SET_EXPORT_URL":
       return {
         ...updated,
@@ -313,7 +396,18 @@ function reducer(state: AdProject, action: Action): AdProject {
     case "REDO":
       return action.payload
 
-    case "_HYDRATE_IMAGES":
+    case "_HYDRATE_IMAGES": {
+      // Hydrate batch images from IndexedDB
+      let hydratedBatch = state.batch
+      if (action.payload.batchImageUrls && action.payload.batchImageUrls.length > 0) {
+        hydratedBatch = {
+          ...state.batch,
+          images: state.batch.images.map((img, i) => ({
+            ...img,
+            url: action.payload.batchImageUrls![i] ?? img.url,
+          })),
+        }
+      }
       return {
         ...state, // don't update updatedAt for hydration
         uploadedImage: {
@@ -324,11 +418,13 @@ function reducer(state: AdProject, action: Action): AdProject {
           ...state.brief,
           referenceImages: action.payload.referenceImages ?? state.brief.referenceImages,
         },
+        batch: hydratedBatch,
         export: {
           ...state.export,
           pngUrl: action.payload.exportUrl ?? state.export.pngUrl,
         },
       }
+    }
 
     default:
       return state
@@ -392,6 +488,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (action.type === "SET_UPLOADED_IMAGE" && action.payload.url) {
       saveImage(IMG_KEY_UPLOADED, action.payload.url).catch(console.warn)
     }
+    if (action.type === "TOGGLE_BATCH_IMAGE" && action.payload.url) {
+      // Save batch images to IndexedDB
+      const newState = reducer(stateRef.current, action)
+      newState.batch.images.forEach((img, i) => {
+        if (img.url) saveImage(batchImgKey(i), img.url).catch(console.warn)
+      })
+    }
     if (action.type === "SET_EXPORT_URL") {
       saveImage(IMG_KEY_EXPORT, action.payload).catch(console.warn)
     }
@@ -430,12 +533,20 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           refImages.push(img ?? "")
         }
 
+        // Load batch images
+        const batchImageUrls: (string | null)[] = []
+        for (let i = 0; i < state.batch.images.length; i++) {
+          const img = await loadImage(batchImgKey(i))
+          batchImageUrls.push(img ?? null)
+        }
+
         rawDispatch({
           type: "_HYDRATE_IMAGES",
           payload: {
             uploadedUrl: uploadedUrl ?? undefined,
             exportUrl: exportUrl ?? undefined,
             referenceImages: refImages.length > 0 ? refImages : undefined,
+            batchImageUrls: batchImageUrls.length > 0 ? batchImageUrls : undefined,
           },
         })
       } catch {

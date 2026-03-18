@@ -31,6 +31,38 @@ export default function ComposePage() {
   const productImageUrl = project.brief.productCutoutUrl || project.brief.productHeroUrl
   const productLayer = project.composition.productImage
 
+  // Auto-enable product layer when compose loads if a product image exists but layer isn't initialized
+  useEffect(() => {
+    if (productImageUrl && !productLayer) {
+      dispatch({
+        type: "SET_PRODUCT_IMAGE",
+        payload: {
+          url: productImageUrl,
+          position: { x: width * 0.35, y: height * 0.35 },
+          scale: 0.8,
+          rotation: 0,
+          opacity: 1,
+          visible: true,
+        },
+      })
+    }
+  }, [productImageUrl, productLayer, dispatch, width, height])
+
+  // Auto-upgrade product layer to cutout when it becomes available
+  // (e.g., async cutout generation finishes after compose already loaded with hero)
+  const prevCutoutUrl = useRef(project.brief.productCutoutUrl)
+  useEffect(() => {
+    if (
+      project.brief.productCutoutUrl &&
+      project.brief.productCutoutUrl !== prevCutoutUrl.current &&
+      productLayer?.visible &&
+      productLayer.url === project.brief.productHeroUrl
+    ) {
+      dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { url: project.brief.productCutoutUrl } })
+    }
+    prevCutoutUrl.current = project.brief.productCutoutUrl
+  }, [project.brief.productCutoutUrl, project.brief.productHeroUrl, productLayer, dispatch])
+
   // ── Safe zone violation detection ────────────────────────────────
   const safeZoneWarning = useMemo(() => {
     const pos = project.composition.textPosition
@@ -739,7 +771,7 @@ export default function ComposePage() {
                           try {
                             const res = await fetch("/api/remove-background", { method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ imageUrl: project.brief.productHeroUrl }) })
+                              body: JSON.stringify({ imageUrl: project.brief.productHeroUrl, productId: project.brief.productId }) })
                             const data = await res.json()
                             if (res.ok && data.cutoutUrl) {
                               dispatch({ type: "SET_BRIEF", payload: { productCutoutUrl: data.cutoutUrl } })
@@ -764,6 +796,103 @@ export default function ComposePage() {
           </div>
         </div>
       </div>
+
+      {/* ── 2x2 Batch Preview ──────────────────────────────────── */}
+      {project.batch.images.length === 2 && project.batch.copies.length === 2 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold">Your 2x2 Batch Preview</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            2 images × 2 headlines = 4 ads. Your edits above apply to all 4.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {project.batch.images.map((batchImg, imgIdx) =>
+              project.batch.copies.map((batchCopy, copyIdx) => {
+                const comboIdx = imgIdx * 2 + copyIdx
+                const isEditing = imgIdx === 0 && copyIdx === 0
+                const miniScale = Math.min(200 / width, 200 / height)
+                return (
+                  <div key={`${imgIdx}-${copyIdx}`} className={`relative overflow-hidden rounded-lg border-2 ${isEditing ? "border-[var(--accent)]" : "border-zinc-700"}`}
+                    style={{ width: width * miniScale, height: height * miniScale }}>
+                    {/* Background */}
+                    {batchImg.url && (
+                      <img src={batchImg.url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+                    )}
+                    {/* Gradient */}
+                    {gradientCSS && <div className="absolute inset-0" style={{ background: gradientCSS }} />}
+                    {/* Product image */}
+                    {productLayer?.visible && productLayer.url && (
+                      <div className="absolute" style={{
+                        left: productLayer.position.x * miniScale,
+                        top: productLayer.position.y * miniScale,
+                        width: `${productLayer.scale * 30}%`,
+                        transform: `rotate(${productLayer.rotation || 0}deg)`,
+                        opacity: productLayer.opacity,
+                      }}>
+                        <img src={productLayer.url} alt="" className="h-auto w-full object-contain" />
+                      </div>
+                    )}
+                    {/* Text overlay */}
+                    <div className="absolute" style={{
+                      left: project.composition.textPosition.x * miniScale,
+                      top: project.composition.textPosition.y * miniScale,
+                      maxWidth: width * 0.8 * miniScale,
+                    }}>
+                      {project.format.contrastMethod === "solid-block" && (
+                        <div className="pointer-events-none absolute rounded" style={{
+                          background: "rgba(0,0,0,0.7)",
+                          inset: `${-4 * miniScale}px ${-6 * miniScale}px`,
+                        }} />
+                      )}
+                      <div className="relative">
+                        <p style={{
+                          fontSize: project.composition.headlineFontSize * miniScale,
+                          fontFamily: project.composition.headlineFontFamily,
+                          fontWeight: project.composition.headlineFontWeight,
+                          color: project.composition.headlineColor,
+                          textAlign: project.composition.headlineAlign,
+                          lineHeight: 1.1,
+                          ...contrastStyles,
+                        }}>
+                          {batchCopy.headline}
+                        </p>
+                        {batchCopy.subhead && (
+                          <p style={{
+                            fontSize: (project.composition.subheadFontSize || 28) * miniScale,
+                            color: project.composition.subheadColor || "#cccccc",
+                            fontFamily: project.composition.headlineFontFamily,
+                            marginTop: 2 * miniScale,
+                          }}>
+                            {batchCopy.subhead}
+                          </p>
+                        )}
+                        <div style={{
+                          marginTop: 4 * miniScale,
+                          display: "inline-block",
+                          backgroundColor: project.composition.ctaStyle.backgroundColor,
+                          color: project.composition.ctaStyle.textColor,
+                          borderRadius: project.composition.ctaStyle.borderRadius * miniScale,
+                          paddingLeft: project.composition.ctaStyle.padding.x * miniScale,
+                          paddingRight: project.composition.ctaStyle.padding.x * miniScale,
+                          paddingTop: project.composition.ctaStyle.padding.y * miniScale,
+                          paddingBottom: project.composition.ctaStyle.padding.y * miniScale,
+                          fontSize: project.composition.ctaStyle.fontSize * miniScale,
+                          fontWeight: 700,
+                        }}>
+                          {batchCopy.cta}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Label */}
+                    <div className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${isEditing ? "bg-[var(--accent)] text-white" : "bg-zinc-800/80 text-zinc-400"}`}>
+                      {isEditing ? "Editing" : `#${comboIdx + 1}`}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="mt-10 flex justify-between">

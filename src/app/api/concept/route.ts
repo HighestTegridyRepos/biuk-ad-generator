@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       body.productAnalysis?.targetAudience
     )
 
-    if (!body.skipCache) {
+    if (!body.skipCache && !body.feedback) {
       const cached = await getCachedConcepts(cacheKey)
       if (cached) {
         return NextResponse.json({ angles: cached, fromCache: true })
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
       body.campaignGoal,
       body.brandVoice,
       body.productAnalysis,
-      body.creativeResearch
+      body.creativeResearch,
+      body.feedback
     )
 
     const text = await generateText(GEMINI_PRO, CONCEPT_SYSTEM_PROMPT, userPrompt)

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       body.contrastMethod
     )
 
-    if (!body.skipCache) {
+    if (!body.skipCache && !body.feedback) {
       const cached = await getCachedPrompts(cacheKey)
       if (cached) {
         return NextResponse.json({ prompts: cached, fromCache: true })
@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       body.width,
       body.height,
       body.contrastMethod,
-      body.visualDirection
+      body.visualDirection,
+      body.feedback
     )
 
     const text = await generateText(GEMINI_FLASH, IMAGE_PROMPT_SYSTEM_PROMPT, userPrompt)

@@ -36,6 +36,8 @@ export default function ConceptPage() {
   const [sessionStarted, setSessionStarted] = useState(false)
   // Flag to auto-fire concept generation after scrape completes
   const [pendingConceptGen, setPendingConceptGen] = useState(false)
+  const [feedback, setFeedback] = useState("")
+  const [showFeedback, setShowFeedback] = useState(false)
   const cutoutPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Clean up cutout polling on unmount
@@ -113,24 +115,29 @@ export default function ConceptPage() {
         },
       })
 
-      // Store product images for use in compose step
+      // Store product ID + images for use in compose step
       dispatch({
         type: "SET_BRIEF",
         payload: {
+          productId: data.product?.id || null,
           productImages: data.product?.product_images || [],
           productHeroUrl: data.product?.hero_image_url || null,
           productCutoutUrl: data.product?.cutout_image_url || null,
         },
       })
 
+      // Start polling for async cutout if not already available
+      if (!data.product?.cutout_image_url && data.product?.hero_image_url) {
+        pollForCutout(productUrl.trim())
+      }
     })
 
     // Signal that we should auto-generate concepts once state settles
     setPendingConceptGen(true)
-  }, [productUrl, executeScrape, dispatch])
+  }, [productUrl, executeScrape, dispatch, pollForCutout])
 
   // ── Generate concepts ────────────────────────────────────────────
-  const generateConcepts = useCallback(async (skipCache = false) => {
+  const generateConcepts = useCallback(async (skipCache = false, userFeedback?: string) => {
     await executeGen(async () => {
       const res = await fetch("/api/concept", {
         method: "POST",
@@ -144,6 +151,7 @@ export default function ConceptPage() {
           productAnalysis: project.brief.productAnalysis,
           creativeResearch: project.brief.creativeResearch,
           skipCache,
+          feedback: userFeedback || undefined,
         }),
       })
       if (!res.ok) {
@@ -453,14 +461,39 @@ export default function ConceptPage() {
         <div className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pick a Concept Angle</h2>
-            <button
-              onClick={() => generateConcepts(true)}
-              disabled={generating}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
-            >
-              {generating ? "Regenerating..." : "Regenerate"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFeedback(!showFeedback)}
+                className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                title="Give feedback on what didn't work"
+              >
+                {showFeedback ? "Hide feedback" : "Not quite right?"}
+              </button>
+              <button
+                onClick={() => {
+                  generateConcepts(true, feedback || undefined)
+                  setFeedback("")
+                  setShowFeedback(false)
+                }}
+                disabled={generating}
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
+              >
+                {generating ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
           </div>
+          {showFeedback && (
+            <div className="mt-2">
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="What didn't work? e.g. 'too generic, needs more urgency' or 'stop showing clean surfaces, be more dramatic'"
+                rows={2}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none"
+              />
+              <p className="mt-1 text-[10px] text-zinc-600">AI will use this to course-correct the next batch</p>
+            </div>
+          )}
           <div className="mt-4 space-y-3">
             {project.concept.angles.map((angle) => (
               <button

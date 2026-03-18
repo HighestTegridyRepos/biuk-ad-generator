@@ -29,7 +29,7 @@ export default function UploadPage() {
   const [mode, setMode] = useState<"generate" | "upload">("generate")
   const [dragging, setDragging] = useState(false)
   const [images, setImages] = useState<GeneratedImage[]>([])
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+  const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set())
   const [describing, setDescribing] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const describeAbortRef = useRef<AbortController | null>(null)
@@ -116,7 +116,8 @@ export default function UploadPage() {
   const generateAll = useCallback(async () => {
     if (!selectedPrompt) return
     setGenError(null)
-    setSelectedIdx(null)
+    setSelectedIdxs(new Set())
+    dispatch({ type: "CLEAR_BATCH_IMAGES" })
     setImages([
       { url: "", status: "loading" },
       { url: "", status: "loading" },
@@ -139,19 +140,34 @@ export default function UploadPage() {
   const generateAllRef = useRef(generateAll)
   generateAllRef.current = generateAll
 
-  // ── Select an image from the grid ──────────────────────────────
-  const selectImage = useCallback(
+  // ── Toggle image selection (multi-select, max 2) ──────────────
+  const toggleImageSelect = useCallback(
     (idx: number) => {
       const img = images[idx]
       if (!img || img.status !== "done") return
 
-      setSelectedIdx(idx)
+      setSelectedIdxs((prev) => {
+        const next = new Set(prev)
+        if (next.has(idx)) {
+          next.delete(idx)
+        } else {
+          if (next.size >= 2) {
+            // Replace the first one
+            const first = next.values().next().value
+            if (first !== undefined) next.delete(first)
+          }
+          next.add(idx)
+        }
+        return next
+      })
+
+      // Add/toggle in batch
       dispatch({
-        type: "SET_UPLOADED_IMAGE",
+        type: "TOGGLE_BATCH_IMAGE",
         payload: { url: img.url },
       })
 
-      // Auto-describe the selected image
+      // Auto-describe this image if not already described
       const match = img.url.match(/^data:([^;]+);base64,(.+)$/)
       if (match) {
         describeImage(match[2], match[1])
@@ -174,7 +190,8 @@ export default function UploadPage() {
       dispatch({ type: "SET_UPLOADED_IMAGE", payload: { url } })
       setGenError(null)
       setImages([])
-      setSelectedIdx(null)
+      setSelectedIdxs(new Set())
+      dispatch({ type: "CLEAR_BATCH_IMAGES" })
 
       const { base64, mediaType } = await fileToBase64(file)
       describeImage(base64, mediaType)
@@ -211,25 +228,26 @@ export default function UploadPage() {
     }
   }, [searchParams, selectedPrompt, isGenerating, images.length])
 
-  // ── Auto-advance to Step 5 when image selected + described ────
+  // ── Auto-advance to Step 5 when 2 images selected + described ──
+  // Disabled: user now picks 2 images for the 2x2 batch, then manually advances
+  // (keeping the effect for single-image mode / upload mode)
   useEffect(() => {
     if (
+      mode === "upload" &&
       project.uploadedImage.url &&
       project.uploadedImage.aiDescription &&
       !describing &&
-      !isGenerating &&
-      autoFired.current &&
-      selectedIdx !== null
+      !isGenerating
     ) {
       dispatch({ type: "SET_STEP", payload: 5 })
       router.push("/create/copy?auto=1")
     }
   }, [
+    mode,
     project.uploadedImage.url,
     project.uploadedImage.aiDescription,
     describing,
     isGenerating,
-    selectedIdx,
     dispatch,
     router,
   ])
@@ -246,7 +264,7 @@ export default function UploadPage() {
       <h1 className="text-2xl font-bold">Step 4: Generate Images</h1>
       <p className="mt-1 text-sm text-zinc-400">
         {images.length > 0
-          ? `${doneCount}/3 images generated. Pick your favorite.`
+          ? `${doneCount}/3 images generated. Pick 2 for your ad batch (${selectedIdxs.size}/2 selected).`
           : "Generate 3 image variations from your prompt, or upload your own."}
       </p>
 
@@ -290,60 +308,63 @@ export default function UploadPage() {
             {/* 2x2 Image Grid */}
             {images.length > 0 ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {images.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => img.status === "done" && selectImage(idx)}
-                      disabled={img.status !== "done"}
-                      className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
-                        selectedIdx === idx
-                          ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30"
-                          : img.status === "done"
-                            ? "border-zinc-700 hover:border-zinc-500"
-                            : "border-zinc-800"
-                      }`}
-                    >
-                      {img.status === "loading" && (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
-                          <span className="text-xs text-zinc-500">Generating…</span>
-                        </div>
-                      )}
-                      {img.status === "done" && (
-                        <>
-                          <img
-                            src={img.url}
-                            alt={`Variation ${idx + 1}`}
-                            className="h-full w-full object-cover"
-                          />
-                          {selectedIdx === idx && (
-                            <div className="absolute right-2 top-2 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white">
-                              Selected
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {img.status === "error" && (
-                        <div className="flex h-full w-full items-center justify-center bg-zinc-900 p-3 text-center">
-                          <p className="text-xs text-red-400">{img.error || "Failed"}</p>
-                        </div>
-                      )}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-3">
+                  {images.map((img, idx) => {
+                    const isSelected = selectedIdxs.has(idx)
+                    const selectionOrder = isSelected ? [...selectedIdxs].indexOf(idx) + 1 : 0
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => img.status === "done" && toggleImageSelect(idx)}
+                        disabled={img.status !== "done"}
+                        className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
+                          isSelected
+                            ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30"
+                            : img.status === "done"
+                              ? "border-zinc-700 hover:border-zinc-500"
+                              : "border-zinc-800"
+                        }`}
+                      >
+                        {img.status === "loading" && (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+                            <span className="text-xs text-zinc-500">Generating…</span>
+                          </div>
+                        )}
+                        {img.status === "done" && (
+                          <>
+                            <img
+                              src={img.url}
+                              alt={`Variation ${idx + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
+                                {selectionOrder}
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {img.status === "error" && (
+                          <div className="flex h-full w-full items-center justify-center bg-zinc-900 p-3 text-center">
+                            <p className="text-xs text-red-400">{img.error || "Failed"}</p>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
+                {selectedIdxs.size > 0 && selectedIdxs.size < 2 && (
+                  <p className="mt-2 text-center text-sm text-amber-400">
+                    Pick 1 more image for your 2x2 batch
+                  </p>
+                )}
 
                 {/* Description status */}
-                {describing && selectedIdx !== null && (
+                {describing && selectedIdxs.size > 0 && (
                   <div className="flex items-center justify-center gap-2 text-sm text-zinc-400">
                     <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
                     Analyzing selected image…
-                  </div>
-                )}
-                {!describing && project.uploadedImage.aiDescription && selectedIdx !== null && (
-                  <div className="mx-auto max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-3">
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">AI Description</div>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-300">{project.uploadedImage.aiDescription}</p>
                   </div>
                 )}
 
@@ -431,10 +452,12 @@ export default function UploadPage() {
         </button>
         <button
           onClick={proceed}
-          disabled={!project.uploadedImage.url}
+          disabled={mode === "generate" ? project.batch.images.length < 2 : !project.uploadedImage.url}
           className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Next: Generate Copy &rarr;
+          {mode === "generate"
+            ? `Next: Generate Copy (${project.batch.images.length}/2 images) →`
+            : "Next: Generate Copy →"}
         </button>
       </div>
     </div>

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       body.campaignGoal
     )
 
-    if (!body.skipCache) {
+    if (!body.skipCache && !body.feedback) {
       const cached = await getCachedCopy(cacheKey)
       if (cached) {
         return NextResponse.json({ variations: cached, fromCache: true })
@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       body.campaignGoal,
       body.brandVoice,
       body.copyDirection,
-      body.productAnalysis
+      body.productAnalysis,
+      body.feedback
     )
 
     const text = await generateText(GEMINI_PRO, COPY_SYSTEM_PROMPT, userPrompt)
