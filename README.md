@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ad Creator
 
-## Getting Started
+Paste a product URL → get a finished social media ad image. 7-step pipeline powered by Claude + Nano Banana Pro.
 
-First, run the development server:
+**Live:** [ad-creator-orpin.vercel.app](https://ad-creator-orpin.vercel.app)
+
+## Quick Start
 
 ```bash
+npm install
+cp .env.local.example .env.local  # add your API keys
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=AIza...
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
+Next.js 16 · Tailwind v4 · Claude Sonnet 4.6 · Gemini (Nano Banana Pro) · Supabase · Vercel
 
-To learn more about Next.js, take a look at the following resources:
+## Pipeline
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Product URL → scrape + AI analysis + Supabase cache → concept angles
+2. Platform + layout template + contrast method
+3. AI image prompts (optimized for Nano Banana Pro)
+4. AI image generation (or manual upload) + auto-describe with Claude Vision
+5. AI headlines written to complement the actual image
+6. Live compose with drag, font picker, styling, undo/redo
+7. Canvas render to PNG at exact platform dimensions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `CLAUDE.md` in the parent directory for full architecture docs.
