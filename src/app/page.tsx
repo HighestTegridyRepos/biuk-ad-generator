@@ -27,7 +27,7 @@ export default function Home() {
         <div className="mt-8 flex justify-center gap-3">
           <Link
             href="/create"
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
           >
             Start New Ad
             <span aria-hidden="true">&rarr;</span>

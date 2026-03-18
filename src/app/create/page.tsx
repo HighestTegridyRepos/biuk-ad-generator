@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useProject, useDispatch } from "@/lib/store"
 import { ConceptAngle, ConceptResponse } from "@/types/ad"
@@ -8,16 +8,95 @@ import { useApiCall } from "@/hooks/useApiCall"
 import LoadingOverlay from "@/components/LoadingOverlay"
 import ErrorBanner from "@/components/ErrorBanner"
 
+interface ProductData {
+  name: string | null
+  brand: string | null
+  description: string | null
+  price: string | null
+  currency: string | null
+  category: string | null
+  hero_image_url: string | null
+  product_images: string[]
+  ai_analysis: {
+    productName?: string
+    targetAudience?: string
+    keySellingPoints?: string[]
+    emotionalHooks?: string[]
+    competitivePositioning?: string
+    productCategory?: string
+    pricePoint?: string
+    suggestedBrief?: string
+  } | null
+}
+
+interface ResearchData {
+  marketPositioning?: {
+    gap?: string
+    opportunity?: string
+    differentiators?: string[]
+    audienceInsights?: string
+  }
+  visualDirection?: {
+    suggestedStyles?: string[]
+    moodKeywords?: string[]
+  }
+  copyDirection?: {
+    hooks?: string[]
+    toneGuidance?: string
+  }
+  competitorBrands?: string[]
+}
+
 export default function ConceptPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
-  const { loading, error, elapsed, execute, clearError } = useApiCall()
+  const { loading: scraping, error: scrapeError, elapsed: scrapeElapsed, execute: executeScrape, clearError: clearScrapeError } = useApiCall()
+  const { loading: generating, error: genError, elapsed: genElapsed, execute: executeGen, clearError: clearGenError } = useApiCall()
 
-  const canGenerate = project.brief.description.trim().length > 10
+  const [productUrl, setProductUrl] = useState("")
+  const [product, setProduct] = useState<ProductData | null>(null)
+  const [research, setResearch] = useState<ResearchData | null>(null)
+  const [fromCache, setFromCache] = useState(false)
+  const [showManualBrief, setShowManualBrief] = useState(false)
 
+  const canGenerate = (product?.ai_analysis?.suggestedBrief || project.brief.description.trim().length > 10)
+
+  // ── Scrape + analyze product ─────────────────────────────────────
+  const analyzeProduct = useCallback(async () => {
+    if (!productUrl.trim()) return
+
+    await executeScrape(async () => {
+      const res = await fetch("/api/scrape-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: productUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to analyze product")
+
+      setProduct(data.product)
+      setResearch(data.research)
+      setFromCache(data.fromCache)
+
+      // Auto-populate brief fields from the analysis
+      const analysis = data.product?.ai_analysis
+      if (analysis) {
+        dispatch({
+          type: "SET_BRIEF",
+          payload: {
+            description: analysis.suggestedBrief || "",
+            targetAudience: analysis.targetAudience || "",
+            campaignGoal: analysis.keySellingPoints?.[0] ? `Promote: ${analysis.keySellingPoints[0]}` : "",
+          },
+        })
+      }
+    })
+  }, [productUrl, executeScrape, dispatch])
+
+  // ── Generate concepts ────────────────────────────────────────────
   const generateConcepts = useCallback(async () => {
-    await execute(async () => {
+    await executeGen(async () => {
       const res = await fetch("/api/concept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -39,7 +118,7 @@ export default function ConceptPage() {
       }
       dispatch({ type: "SET_CONCEPT_ANGLES", payload: data.angles })
     })
-  }, [project.brief, dispatch, execute])
+  }, [project.brief, dispatch, executeGen])
 
   const selectAngle = (angle: ConceptAngle) => {
     dispatch({ type: "SELECT_CONCEPT", payload: angle.id })
@@ -55,7 +134,6 @@ export default function ConceptPage() {
   const handleReferenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
-
     for (const file of Array.from(files)) {
       const url = URL.createObjectURL(file)
       dispatch({
@@ -64,156 +142,277 @@ export default function ConceptPage() {
           referenceImages: [...project.brief.referenceImages, url],
         },
       })
-
-      // Analyze reference in background
       const formData = new FormData()
       formData.append("image", file)
       formData.append("imageId", `ref-${Date.now()}`)
-
       try {
-        const res = await fetch("/api/analyze-reference", {
-          method: "POST",
-          body: formData,
-        })
+        const res = await fetch("/api/analyze-reference", { method: "POST", body: formData })
         if (res.ok) {
           const analysis = await res.json()
           dispatch({
             type: "SET_BRIEF",
-            payload: {
-              referenceAnalysis: [...project.brief.referenceAnalysis, analysis],
-            },
+            payload: { referenceAnalysis: [...project.brief.referenceAnalysis, analysis] },
           })
         }
       } catch {
-        // Reference analysis is optional — don't block the flow
+        // Non-blocking
       }
     }
   }
 
   return (
     <div className="step-transition relative mx-auto max-w-3xl px-6 py-10">
-      {loading && <LoadingOverlay message="Generating concepts…" elapsed={elapsed} />}
-      <h1 className="text-2xl font-bold">Step 1: Brief &amp; Concept</h1>
+      {scraping && <LoadingOverlay message="Analyzing product page…" elapsed={scrapeElapsed}><p className="text-xs text-zinc-500">Scraping page, extracting data, running AI analysis</p></LoadingOverlay>}
+      {generating && <LoadingOverlay message="Generating concepts…" elapsed={genElapsed} />}
+
+      <h1 className="text-2xl font-bold">Step 1: Product &amp; Concept</h1>
       <p className="mt-1 text-sm text-zinc-400">
-        Describe what you need. Upload reference ads if you have them. Then
-        generate concept angles.
+        Paste a product link and we&apos;ll research it automatically — or write a brief manually.
       </p>
 
-      {/* Brief Input */}
-      <div className="mt-8 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-zinc-300">
-            Client Brief *
-          </label>
+      {/* ── Product URL Input ──────────────────────────────────── */}
+      <div className="mt-8">
+        <label className="block text-sm font-medium text-zinc-300">Product URL</label>
+        <div className="mt-1 flex gap-2">
+          <input
+            type="url"
+            value={productUrl}
+            onChange={(e) => setProductUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && analyzeProduct()}
+            placeholder="https://example.com/product-page"
+            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+          <button
+            onClick={analyzeProduct}
+            disabled={!productUrl.trim() || scraping}
+            className="shrink-0 rounded-lg bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Analyze
+          </button>
+        </div>
+        {scrapeError && <ErrorBanner error={scrapeError} onRetry={analyzeProduct} onDismiss={clearScrapeError} />}
+      </div>
+
+      {/* ── Product Card (after analysis) ──────────────────────── */}
+      {product && (
+        <div className="mt-6 rounded-lg border border-zinc-700 bg-zinc-900 p-5">
+          <div className="flex gap-4">
+            {product.hero_image_url && (
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
+                <img src={product.hero_image_url} alt="" className="h-full w-full object-cover" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-white truncate">{product.name || "Product"}</h3>
+                {fromCache && (
+                  <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                    Cached
+                  </span>
+                )}
+              </div>
+              {product.brand && <p className="text-sm text-zinc-400">{product.brand}</p>}
+              {product.price && (
+                <p className="mt-1 text-sm font-medium text-zinc-200">
+                  {product.currency || "$"}{product.price}
+                </p>
+              )}
+              {product.ai_analysis?.targetAudience && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Audience: {product.ai_analysis.targetAudience}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Emotional hooks */}
+          {product.ai_analysis?.emotionalHooks && product.ai_analysis.emotionalHooks.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                Emotional Hooks
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {product.ai_analysis.emotionalHooks.map((hook, i) => (
+                  <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
+                    {hook}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Key selling points */}
+          {product.ai_analysis?.keySellingPoints && product.ai_analysis.keySellingPoints.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                Key Selling Points
+              </div>
+              <div className="mt-1.5 space-y-1">
+                {product.ai_analysis.keySellingPoints.map((point, i) => (
+                  <p key={i} className="text-xs text-zinc-400">• {point}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Product images */}
+          {product.product_images && product.product_images.length > 1 && (
+            <div className="mt-4">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                Product Images ({product.product_images.length})
+              </div>
+              <div className="mt-1.5 flex gap-2 overflow-x-auto">
+                {product.product_images.slice(0, 6).map((img, i) => (
+                  <div key={i} className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-zinc-700">
+                    <img src={img} alt="" className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Research Card ──────────────────────────────────────── */}
+      {research && (
+        <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900 p-5">
+          <div className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+            Creative Research
+          </div>
+
+          {research.marketPositioning?.opportunity && (
+            <p className="mt-2 text-sm text-zinc-300">
+              {research.marketPositioning.opportunity}
+            </p>
+          )}
+
+          {research.visualDirection?.suggestedStyles && (
+            <div className="mt-3">
+              <span className="text-[10px] font-medium uppercase text-zinc-500">Visual styles: </span>
+              <span className="text-xs text-zinc-400">
+                {research.visualDirection.suggestedStyles.join(" • ")}
+              </span>
+            </div>
+          )}
+
+          {research.copyDirection?.toneGuidance && (
+            <div className="mt-2">
+              <span className="text-[10px] font-medium uppercase text-zinc-500">Tone: </span>
+              <span className="text-xs text-zinc-400">{research.copyDirection.toneGuidance}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Brief (auto-populated or manual) ───────────────────── */}
+      {(product || showManualBrief) && (
+        <div className="mt-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-zinc-300">
+              Ad Brief {product ? "(auto-generated — edit if needed)" : "*"}
+            </label>
+          </div>
           <textarea
             value={project.brief.description}
             onChange={(e) =>
               dispatch({ type: "SET_BRIEF", payload: { description: e.target.value } })
             }
             placeholder="Describe the product/service, the campaign goal, and any key messages or offers..."
-            rows={5}
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            rows={4}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
-        </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">
-              Target Audience
-            </label>
-            <input
-              type="text"
-              value={project.brief.targetAudience || ""}
-              onChange={(e) =>
-                dispatch({ type: "SET_BRIEF", payload: { targetAudience: e.target.value } })
-              }
-              placeholder="e.g. Women 25-45, fitness enthusiasts"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">
-              Campaign Goal
-            </label>
-            <input
-              type="text"
-              value={project.brief.campaignGoal || ""}
-              onChange={(e) =>
-                dispatch({ type: "SET_BRIEF", payload: { campaignGoal: e.target.value } })
-              }
-              placeholder="e.g. Drive trial subscriptions"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">
-              Brand Voice
-            </label>
-            <input
-              type="text"
-              value={project.brief.brandVoice || ""}
-              onChange={(e) =>
-                dispatch({ type: "SET_BRIEF", payload: { brandVoice: e.target.value } })
-              }
-              placeholder="e.g. Bold, confident, playful"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            />
-          </div>
-        </div>
-
-        {/* Reference Uploads */}
-        <div>
-          <label className="block text-sm font-medium text-zinc-300">
-            Reference Ads (optional)
-          </label>
-          <div className="mt-2 flex flex-wrap gap-3">
-            {project.brief.referenceImages.map((url, i) => (
-              <div key={i} className="relative h-24 w-24 overflow-hidden rounded-lg border border-zinc-700">
-                <img src={url} alt={`Reference ${i + 1}`} className="h-full w-full object-cover" />
-                {project.brief.referenceAnalysis[i] && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-emerald-500/80 px-1 py-0.5 text-center text-[10px] font-bold text-black">
-                    Analyzed
-                  </div>
-                )}
-              </div>
-            ))}
-            <label className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-zinc-700 text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300">
-              <span className="text-2xl">+</span>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300">Target Audience</label>
               <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleReferenceUpload}
-                className="hidden"
+                type="text"
+                value={project.brief.targetAudience || ""}
+                onChange={(e) => dispatch({ type: "SET_BRIEF", payload: { targetAudience: e.target.value } })}
+                placeholder="e.g. Women 25-45, fitness enthusiasts"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
               />
-            </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300">Campaign Goal</label>
+              <input
+                type="text"
+                value={project.brief.campaignGoal || ""}
+                onChange={(e) => dispatch({ type: "SET_BRIEF", payload: { campaignGoal: e.target.value } })}
+                placeholder="e.g. Drive trial subscriptions"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300">Brand Voice</label>
+              <input
+                type="text"
+                value={project.brief.brandVoice || ""}
+                onChange={(e) => dispatch({ type: "SET_BRIEF", payload: { brandVoice: e.target.value } })}
+                placeholder="e.g. Bold, confident, playful"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Reference Uploads */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-300">Reference Ads (optional)</label>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {project.brief.referenceImages.map((url, i) => (
+                <div key={i} className="relative h-24 w-24 overflow-hidden rounded-lg border border-zinc-700">
+                  <img src={url} alt={`Reference ${i + 1}`} className="h-full w-full object-cover" />
+                  {project.brief.referenceAnalysis[i] && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-500/80 px-1 py-0.5 text-center text-[10px] font-bold text-black">
+                      Analyzed
+                    </div>
+                  )}
+                </div>
+              ))}
+              <label className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-zinc-700 text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300">
+                <span className="text-2xl">+</span>
+                <input type="file" accept="image/*" multiple onChange={handleReferenceUpload} className="hidden" />
+              </label>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Generate Button */}
-      <div className="mt-8">
+      {/* ── Manual brief toggle (no product URL) ───────────────── */}
+      {!product && !showManualBrief && (
         <button
-          onClick={generateConcepts}
-          disabled={!canGenerate || loading}
-          className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          onClick={() => setShowManualBrief(true)}
+          className="mt-6 text-sm text-zinc-500 transition-colors hover:text-zinc-300"
         >
-          Generate Concept Angles
+          Or write a brief manually without a product URL →
         </button>
-        {error && <ErrorBanner error={error} onRetry={generateConcepts} onDismiss={clearError} />}
-      </div>
+      )}
 
-      {/* Concept Angles */}
+      {/* ── Generate Concepts ──────────────────────────────────── */}
+      {(product || showManualBrief) && (
+        <div className="mt-8">
+          <button
+            onClick={generateConcepts}
+            disabled={!canGenerate || generating}
+            className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Generate Concept Angles
+          </button>
+          {genError && <ErrorBanner error={genError} onRetry={generateConcepts} onDismiss={clearGenError} />}
+        </div>
+      )}
+
+      {/* ── Concept Angles ─────────────────────────────────────── */}
       {project.concept.angles.length > 0 && (
         <div className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pick a Concept Angle</h2>
             <button
               onClick={generateConcepts}
-              disabled={loading}
+              disabled={generating}
               className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40"
             >
-              {loading ? "Regenerating..." : "Regenerate"}
+              {generating ? "Regenerating..." : "Regenerate"}
             </button>
           </div>
           <div className="mt-4 space-y-3">
@@ -242,7 +441,7 @@ export default function ConceptPage() {
         </div>
       )}
 
-      {/* Next Step */}
+      {/* ── Next Step ──────────────────────────────────────────── */}
       {project.concept.selectedAngleId && (
         <div className="mt-8 flex justify-end">
           <button

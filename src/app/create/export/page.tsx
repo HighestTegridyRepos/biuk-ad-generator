@@ -32,6 +32,11 @@ export default function ExportPage() {
       return
     }
 
+    // Wait for custom Google Fonts to finish loading before drawing text
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      await document.fonts.ready
+    }
+
     // Draw background image
     if (project.uploadedImage.url) {
       const img = new Image()
@@ -152,11 +157,14 @@ export default function ExportPage() {
         ctx.lineJoin = "round"
       }
 
+      // Canvas textAlign anchors text at the x coordinate:
+      // "left" = x is left edge, "center" = x is center point, "right" = x is right edge
+      // The text block starts at tx and has maxTextWidth available
       const alignX =
         project.composition.headlineAlign === "center"
-          ? tx + (width * 0.4)
+          ? tx + maxTextWidth / 2
           : project.composition.headlineAlign === "right"
-            ? tx + (width * 0.7)
+            ? tx + maxTextWidth
             : tx
 
       for (const l of lines) {
@@ -258,7 +266,7 @@ export default function ExportPage() {
     : undefined
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="step-transition mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-2xl font-bold">Step 7: Export</h1>
       <p className="mt-1 text-sm text-zinc-400">
         Render your ad to PNG at exact platform dimensions ({width}x{height}).
@@ -306,6 +314,10 @@ export default function ExportPage() {
                   textShadow:
                     project.format.contrastMethod === "text-shadow"
                       ? "0 2px 8px rgba(0,0,0,0.6)"
+                      : undefined,
+                  WebkitTextStroke:
+                    project.format.contrastMethod === "outlined-text"
+                      ? "2px rgba(0,0,0,0.5)"
                       : undefined,
                 }}
               >
@@ -357,7 +369,7 @@ export default function ExportPage() {
           <button
             onClick={renderToCanvas}
             disabled={rendering}
-            className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
+            className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50"
           >
             {rendering ? "Rendering..." : "Render PNG"}
           </button>

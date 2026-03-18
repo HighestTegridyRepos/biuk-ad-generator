@@ -48,7 +48,7 @@ export default function FormatPage() {
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="step-transition mx-auto max-w-5xl px-6 py-10">
       <h1 className="text-2xl font-bold">Step 2: Format &amp; Layout</h1>
       <p className="mt-1 text-sm text-zinc-400">
         Choose your platform, pick a layout template, and select a contrast
@@ -244,7 +244,7 @@ export default function FormatPage() {
         </button>
         <button
           onClick={proceed}
-          className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+          className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
         >
           Next: Image Prompts &rarr;
         </button>

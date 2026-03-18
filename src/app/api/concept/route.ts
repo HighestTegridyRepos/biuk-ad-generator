@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: userPrompt }],
     })
 
-    const text = message.content[0].type === "text" ? message.content[0].text : ""
+    const firstBlock = message.content?.[0]
+    const text = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+    if (!text) {
+      return NextResponse.json({ error: "AI returned an empty response. Try again." }, { status: 502 })
+    }
     const parsed: ConceptResponse = extractJSON(text)
     return NextResponse.json(parsed)
   } catch (error) {

@@ -33,7 +33,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <div className="mt-6 flex justify-center gap-3">
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}
-                className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+                className="rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
               >
                 Try Again
               </button>

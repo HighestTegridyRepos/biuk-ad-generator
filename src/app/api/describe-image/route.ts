@@ -41,8 +41,12 @@ export async function POST(req: NextRequest) {
       ],
     })
 
-    const description =
-      message.content[0].type === "text" ? message.content[0].text : ""
+    const firstBlock = message.content?.[0]
+    const description = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+
+    if (!description) {
+      return NextResponse.json({ error: "AI could not describe this image. Try a different image." }, { status: 502 })
+    }
 
     return NextResponse.json({ description })
   } catch (error) {

@@ -1,14 +1,16 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { useProject, useDispatch } from "@/lib/store"
+import { useProject, useDispatch, useUndo } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
 
 export default function ComposePage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
+  const { undo, redo } = useUndo()
   const previewRef = useRef<HTMLDivElement>(null)
 
   const { width, height } = project.format
@@ -17,13 +19,36 @@ export default function ComposePage() {
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  // ── Safe zone violation detection ────────────────────────────────
+  const safeZoneWarning = useMemo(() => {
+    const pos = project.composition.textPosition
+    const sz = project.format.safeZones
+    const violations: string[] = []
+    if (pos.x < sz.left) violations.push("left")
+    if (pos.y < sz.top) violations.push("top")
+    if (pos.x > width - sz.right - 100) violations.push("right")
+    if (pos.y > height - sz.bottom - 50) violations.push("bottom")
+    return violations.length > 0 ? `Text is outside safe zone (${violations.join(", ")})` : null
+  }, [project.composition.textPosition, project.format.safeZones, width, height])
+
+  // ── Pointer-agnostic drag (mouse + touch) ───────────────────────
+  const getPointerPos = (e: MouseEvent | TouchEvent) => {
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    return { x: e.clientX, y: e.clientY }
+  }
+
+  const handlePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault()
+      const pos = 'touches' in e
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY }
       setDragging(true)
       setDragStart({
-        x: e.clientX - project.composition.textPosition.x * scale,
-        y: e.clientY - project.composition.textPosition.y * scale,
+        x: pos.x - project.composition.textPosition.x * scale,
+        y: pos.y - project.composition.textPosition.y * scale,
       })
     },
     [project.composition.textPosition, scale]
@@ -32,22 +57,28 @@ export default function ComposePage() {
   useEffect(() => {
     if (!dragging) return
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const newX = Math.max(0, Math.min(width - 100, (e.clientX - dragStart.x) / scale))
-      const newY = Math.max(0, Math.min(height - 50, (e.clientY - dragStart.y) / scale))
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault()
+      const pos = getPointerPos(e)
+      const newX = Math.max(0, Math.min(width - 100, (pos.x - dragStart.x) / scale))
+      const newY = Math.max(0, Math.min(height - 50, (pos.y - dragStart.y) / scale))
       dispatch({
         type: "SET_TEXT_POSITION",
         payload: { x: Math.round(newX), y: Math.round(newY) },
       })
     }
 
-    const handleMouseUp = () => setDragging(false)
+    const handleUp = () => setDragging(false)
 
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", handleUp)
+    window.addEventListener("touchmove", handleMove, { passive: false })
+    window.addEventListener("touchend", handleUp)
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", handleUp)
+      window.removeEventListener("touchmove", handleMove)
+      window.removeEventListener("touchend", handleUp)
     }
   }, [dragging, dragStart, scale, width, height, dispatch])
 
@@ -60,13 +91,27 @@ export default function ComposePage() {
     router.push("/create/export")
   }
 
+  useKeyboardShortcuts({
+    onNext: project.uploadedImage.url && project.copy.selected ? proceed : undefined,
+    onBack: () => router.push("/create/copy"),
+    onUndo: undo,
+    onRedo: redo,
+  })
+
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10">
+    <div className="step-transition mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-bold">Step 6: Compose</h1>
       <p className="mt-1 text-sm text-zinc-400">
         Position your text on the image. Drag the text to move it. Adjust styling
         in the controls panel.
       </p>
+
+      {/* Safe zone warning */}
+      {safeZoneWarning && (
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
+          ⚠ {safeZoneWarning} — some platforms may crop this area
+        </div>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
         {/* Preview */}
@@ -128,8 +173,9 @@ export default function ComposePage() {
             {/* Text Overlay (draggable) */}
             {project.copy.selected && (
               <div
-                onMouseDown={handleMouseDown}
-                className="absolute cursor-move"
+                onMouseDown={handlePointerDown}
+                onTouchStart={handlePointerDown}
+                className="absolute cursor-move touch-none"
                 style={{
                   left: project.composition.textPosition.x * scale,
                   top: project.composition.textPosition.y * scale,
@@ -253,6 +299,29 @@ export default function ComposePage() {
                       {w}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-500">Font Family</label>
+                <select
+                  value={project.composition.headlineFontFamily}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "UPDATE_COMPOSITION",
+                      payload: { headlineFontFamily: e.target.value },
+                    })
+                  }
+                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+                >
+                  <option value="Inter, sans-serif">Inter</option>
+                  <option value="'Playfair Display', serif">Playfair Display</option>
+                  <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                  <option value="'Montserrat', sans-serif">Montserrat</option>
+                  <option value="'Oswald', sans-serif">Oswald</option>
+                  <option value="'Raleway', sans-serif">Raleway</option>
+                  <option value="'Roboto Condensed', sans-serif">Roboto Condensed</option>
+                  <option value="'DM Serif Display', serif">DM Serif Display</option>
                 </select>
               </div>
 
@@ -436,7 +505,7 @@ export default function ComposePage() {
         <button
           onClick={proceed}
           disabled={!project.uploadedImage.url || !project.copy.selected}
-          className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next: Export &rarr;
         </button>

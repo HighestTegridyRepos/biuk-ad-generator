@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useReducer, useEffect, useState, ReactNode, Dispatch, useCallback } from "react"
+import { createContext, useContext, useReducer, useEffect, useState, useRef, ReactNode, Dispatch, useCallback } from "react"
 import { v4 as uuid } from "uuid"
 import { AdProject, ConceptAngle, CopyVariation, Platform, Rect, ContrastMethod, CTAStyle, GradientConfig } from "@/types/ad"
 import { platformSpecs } from "@/lib/platforms"
@@ -155,6 +155,8 @@ type Action =
   | { type: "SET_EXPORT_URL"; payload: string }
   | { type: "SET_STEP"; payload: 1 | 2 | 3 | 4 | 5 | 6 | 7 }
   | { type: "RESET" }
+  | { type: "UNDO"; payload: AdProject }
+  | { type: "REDO"; payload: AdProject }
   | { type: "_HYDRATE_IMAGES"; payload: { uploadedUrl?: string | null; exportUrl?: string | null; referenceImages?: string[] } }
 
 function reducer(state: AdProject, action: Action): AdProject {
@@ -230,7 +232,7 @@ function reducer(state: AdProject, action: Action): AdProject {
       }
 
     case "SET_UPLOADED_IMAGE":
-      return { ...updated, uploadedImage: action.payload }
+      return { ...updated, uploadedImage: { ...updated.uploadedImage, ...action.payload } }
 
     case "SET_COPY_VARIATIONS":
       return { ...updated, copy: { ...updated.copy, variations: action.payload } }
@@ -277,6 +279,10 @@ function reducer(state: AdProject, action: Action): AdProject {
     case "RESET":
       return createDefaultProject()
 
+    case "UNDO":
+    case "REDO":
+      return action.payload
+
     case "_HYDRATE_IMAGES":
       return {
         ...state, // don't update updatedAt for hydration
@@ -304,6 +310,13 @@ function reducer(state: AdProject, action: Action): AdProject {
 const ProjectContext = createContext<AdProject | null>(null)
 const DispatchContext = createContext<Dispatch<Action> | null>(null)
 const HydratedContext = createContext<boolean>(false)
+const UndoContext = createContext<{ canUndo: boolean; canRedo: boolean; undo: () => void; redo: () => void }>({
+  canUndo: false, canRedo: false, undo: () => {}, redo: () => {},
+})
+
+// Actions that fire very frequently during drag/slider — debounce for history
+const HIGH_FREQ_ACTIONS = new Set(["SET_TEXT_POSITION", "UPDATE_COMPOSITION", "SET_CTA_STYLE", "SET_OVERLAY_GRADIENT"])
+const HISTORY_LIMIT = 30
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(reducer, null, () => {
@@ -314,8 +327,35 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const [hydrated, setHydrated] = useState(false)
 
-  // Wrapped dispatch that persists state + images
+  // ── Undo/redo history ────────────────────────────────────────
+  const undoStack = useRef<AdProject[]>([])
+  const redoStack = useRef<AdProject[]>([])
+  const lastPushTime = useRef(0)
+  const stateRef = useRef(state)
+  stateRef.current = state
+
+  // Wrapped dispatch that persists state + images + tracks history
   const dispatch: Dispatch<Action> = useCallback((action: Action) => {
+    // Skip history for internal/hydration/undo/redo actions
+    const skip = action.type === "_HYDRATE_IMAGES" || action.type === "UNDO" || action.type === "REDO" || action.type === "RESET"
+    if (!skip) {
+      const now = Date.now()
+      // For high-frequency actions, only push a snapshot every 500ms
+      if (HIGH_FREQ_ACTIONS.has(action.type)) {
+        if (now - lastPushTime.current > 500) {
+          undoStack.current.push(stateRef.current)
+          if (undoStack.current.length > HISTORY_LIMIT) undoStack.current.shift()
+          redoStack.current = []
+          lastPushTime.current = now
+        }
+      } else {
+        undoStack.current.push(stateRef.current)
+        if (undoStack.current.length > HISTORY_LIMIT) undoStack.current.shift()
+        redoStack.current = []
+        lastPushTime.current = now
+      }
+    }
+
     rawDispatch(action)
 
     // Side effects for image storage (fire-and-forget)
@@ -379,11 +419,34 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run once on mount
 
+  const undo = useCallback(() => {
+    const prev = undoStack.current.pop()
+    if (prev) {
+      redoStack.current.push(stateRef.current)
+      rawDispatch({ type: "UNDO", payload: prev })
+    }
+  }, [])
+
+  const redo = useCallback(() => {
+    const next = redoStack.current.pop()
+    if (next) {
+      undoStack.current.push(stateRef.current)
+      rawDispatch({ type: "REDO", payload: next })
+    }
+  }, [])
+
   return (
     <ProjectContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
         <HydratedContext.Provider value={hydrated}>
-          {children}
+          <UndoContext.Provider value={{
+            canUndo: undoStack.current.length > 0,
+            canRedo: redoStack.current.length > 0,
+            undo,
+            redo,
+          }}>
+            {children}
+          </UndoContext.Provider>
         </HydratedContext.Provider>
       </DispatchContext.Provider>
     </ProjectContext.Provider>
@@ -404,4 +467,8 @@ export function useDispatch() {
 
 export function useHydrated() {
   return useContext(HydratedContext)
+}
+
+export function useUndo() {
+  return useContext(UndoContext)
 }

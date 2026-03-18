@@ -37,6 +37,9 @@ export default function UploadPage() {
   const [mode, setMode] = useState<"generate" | "upload">("generate")
   const [describing, setDescribing] = useState(false)
   const describeAbortRef = useRef<AbortController | null>(null)
+  // Track the latest image URL in a ref so describeImage never uses a stale closure
+  const latestImageUrlRef = useRef(project.uploadedImage.url)
+  latestImageUrlRef.current = project.uploadedImage.url
 
   const selectedPrompt = project.imagePrompts.prompts.find(
     (p) => p.id === project.imagePrompts.selectedPromptId
@@ -58,10 +61,12 @@ export default function UploadPage() {
         })
         if (!res.ok) return
         const data = await res.json()
-        if (data.description && project.uploadedImage.url) {
+        // Use the ref to get the current URL, not the stale closure value
+        const currentUrl = latestImageUrlRef.current
+        if (data.description && currentUrl) {
           dispatch({
             type: "SET_UPLOADED_IMAGE",
-            payload: { url: project.uploadedImage.url, aiDescription: data.description },
+            payload: { url: currentUrl, aiDescription: data.description },
           })
         }
       } catch (err) {
@@ -71,7 +76,7 @@ export default function UploadPage() {
         setDescribing(false)
       }
     },
-    [dispatch, project.uploadedImage.url]
+    [dispatch]
   )
 
   const handleFile = useCallback(
