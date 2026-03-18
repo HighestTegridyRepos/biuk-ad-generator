@@ -35,9 +35,11 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (cached) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cachedAny = cached as any
       return NextResponse.json({
         product: cached,
-        research: cached.research?.[0] ?? null,
+        research: cachedAny.research?.[0] ?? null,
         fromCache: true,
       })
     }
