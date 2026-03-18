@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 
-let _client: ReturnType<typeof createClient> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: SupabaseClient<any, "public", any> | null = null
 
 export function getSupabase() {
   if (_client) return _client
@@ -9,7 +10,9 @@ export function getSupabase() {
   if (!url || !key) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required")
   }
-  _client = createClient(url, key)
+  // Use `any` for database type since we don't have generated types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _client = createClient<any>(url, key)
   return _client
 }
 
