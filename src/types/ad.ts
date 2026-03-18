@@ -108,6 +108,50 @@ export interface GradientConfig {
   coverage: number
 }
 
+// ── Product analysis & creative research (from URL scrape) ────────
+
+export interface ProductAnalysis {
+  productName?: string
+  targetAudience?: string
+  keySellingPoints?: string[]
+  emotionalHooks?: string[]
+  competitivePositioning?: string
+  productCategory?: string
+  pricePoint?: string
+  priceAnchor?: string
+  purchaseBarrier?: string
+  suggestedBrief?: string
+}
+
+export interface CreativeResearch {
+  marketPositioning?: {
+    gap?: string
+    opportunity?: string
+    differentiators?: string[]
+    audienceInsights?: string
+  }
+  visualDirection?: {
+    suggestedStyles?: string[]
+    colorPalettes?: string[][]
+    moodKeywords?: string[]
+    avoidPatterns?: string[]
+  }
+  copyDirection?: {
+    hooks?: string[]
+    avoidCliches?: string[]
+    toneGuidance?: string
+  }
+  competitorBrands?: string[]
+}
+
+export interface ProductImageLayer {
+  url: string                    // product image or cutout URL
+  position: { x: number; y: number }
+  scale: number                  // 0.1 to 2.0
+  opacity: number                // 0 to 1
+  visible: boolean
+}
+
 export interface AdProject {
   id: string
   name: string
@@ -123,6 +167,11 @@ export interface AdProject {
     campaignGoal?: string
     brandVoice?: string
     constraints?: string
+    productAnalysis?: ProductAnalysis
+    creativeResearch?: CreativeResearch
+    productImages?: string[]       // all scraped product image URLs
+    productHeroUrl?: string | null // hero image from scrape
+    productCutoutUrl?: string | null // background-removed cutout
   }
   concept: {
     angles: ConceptAngle[]
@@ -176,6 +225,7 @@ export interface AdProject {
     subheadColor?: string
     ctaStyle: CTAStyle
     overlayGradient?: GradientConfig
+    productImage?: ProductImageLayer
     supportElements: Array<{
       type: "logo" | "badge" | "text"
       content: string
@@ -198,6 +248,8 @@ export interface ConceptRequest {
   targetAudience?: string
   campaignGoal?: string
   brandVoice?: string
+  productAnalysis?: ProductAnalysis
+  creativeResearch?: CreativeResearch
 }
 
 export interface ConceptResponse {
@@ -212,6 +264,7 @@ export interface ImagePromptRequest {
   height: number
   messageZonePosition: string
   contrastMethod?: ContrastMethod
+  visualDirection?: CreativeResearch["visualDirection"]
 }
 
 export interface ImagePromptResponse {
@@ -230,6 +283,8 @@ export interface CopyRequest {
   targetAudience?: string
   campaignGoal?: string
   brandVoice?: string
+  copyDirection?: CreativeResearch["copyDirection"]
+  productAnalysis?: ProductAnalysis
 }
 
 export interface CopyResponse {

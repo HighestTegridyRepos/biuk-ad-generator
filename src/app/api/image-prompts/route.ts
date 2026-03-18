@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
       body.messageZonePosition,
       body.width,
       body.height,
-      body.contrastMethod
+      body.contrastMethod,
+      body.visualDirection
     )
 
     const message = await client.messages.create({

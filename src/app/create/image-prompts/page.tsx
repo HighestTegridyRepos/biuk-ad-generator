@@ -41,6 +41,7 @@ export default function ImagePromptsPage() {
           height: project.format.height,
           messageZonePosition,
           contrastMethod: project.format.contrastMethod,
+          visualDirection: project.brief.creativeResearch?.visualDirection,
         }),
       })
       if (!res.ok) {

@@ -77,6 +77,27 @@ export default function ExportPage() {
       ctx.fillRect(0, 0, width, height)
     }
 
+    // Draw product image layer
+    const pl = project.composition.productImage
+    if (pl?.visible && pl.url) {
+      const prodImg = new Image()
+      prodImg.crossOrigin = "anonymous"
+      await new Promise<void>((resolve) => {
+        prodImg.onload = () => {
+          ctx.save()
+          ctx.globalAlpha = pl.opacity
+          // Scale: 1.0 = 30% of canvas width (matches compose preview)
+          const drawWidth = width * 0.3 * pl.scale
+          const drawHeight = (prodImg.height / prodImg.width) * drawWidth
+          ctx.drawImage(prodImg, pl.position.x, pl.position.y, drawWidth, drawHeight)
+          ctx.restore()
+          resolve()
+        }
+        prodImg.onerror = () => resolve()
+        prodImg.src = pl.url
+      })
+    }
+
     // Draw headline, subhead, and CTA
     if (project.copy.selected) {
       const tx = project.composition.textPosition.x
@@ -290,6 +311,22 @@ export default function ExportPage() {
           )}
           {gradientCSS && (
             <div className="absolute inset-0" style={{ background: gradientCSS }} />
+          )}
+          {/* Product image layer */}
+          {project.composition.productImage?.visible && project.composition.productImage.url && (
+            <img
+              src={project.composition.productImage.url}
+              alt="Product"
+              className="absolute"
+              style={{
+                left: project.composition.productImage.position.x * previewScale,
+                top: project.composition.productImage.position.y * previewScale,
+                width: `${project.composition.productImage.scale * 30}%`,
+                height: "auto",
+                opacity: project.composition.productImage.opacity,
+                objectFit: "contain",
+              }}
+            />
           )}
           {project.copy.selected && (
             <div

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useReducer, useEffect, useState, useRef, ReactNode, Dispatch, useCallback } from "react"
 import { v4 as uuid } from "uuid"
-import { AdProject, ConceptAngle, CopyVariation, Platform, Rect, ContrastMethod, CTAStyle, GradientConfig } from "@/types/ad"
+import { AdProject, ConceptAngle, CopyVariation, Platform, Rect, ContrastMethod, CTAStyle, GradientConfig, ProductAnalysis, CreativeResearch, ProductImageLayer } from "@/types/ad"
 import { platformSpecs } from "@/lib/platforms"
 import { saveImage, loadImage, clearImages } from "@/lib/image-store"
 
@@ -137,6 +137,7 @@ function loadFromLocalStorage(): AdProject | null {
 
 type Action =
   | { type: "SET_BRIEF"; payload: Partial<AdProject["brief"]> }
+  | { type: "SET_PRODUCT_DATA"; payload: { productAnalysis?: ProductAnalysis; creativeResearch?: CreativeResearch } }
   | { type: "SET_CONCEPT_ANGLES"; payload: ConceptAngle[] }
   | { type: "SELECT_CONCEPT"; payload: string }
   | { type: "SET_PLATFORM"; payload: Platform }
@@ -152,6 +153,8 @@ type Action =
   | { type: "SET_TEXT_POSITION"; payload: { x: number; y: number } }
   | { type: "SET_CTA_STYLE"; payload: Partial<CTAStyle> }
   | { type: "SET_OVERLAY_GRADIENT"; payload: GradientConfig | undefined }
+  | { type: "SET_PRODUCT_IMAGE"; payload: ProductImageLayer | undefined }
+  | { type: "UPDATE_PRODUCT_IMAGE"; payload: Partial<ProductImageLayer> }
   | { type: "SET_EXPORT_URL"; payload: string }
   | { type: "SET_STEP"; payload: 1 | 2 | 3 | 4 | 5 | 6 | 7 }
   | { type: "RESET" }
@@ -165,6 +168,16 @@ function reducer(state: AdProject, action: Action): AdProject {
   switch (action.type) {
     case "SET_BRIEF":
       return { ...updated, brief: { ...updated.brief, ...action.payload } }
+
+    case "SET_PRODUCT_DATA":
+      return {
+        ...updated,
+        brief: {
+          ...updated.brief,
+          productAnalysis: action.payload.productAnalysis ?? updated.brief.productAnalysis,
+          creativeResearch: action.payload.creativeResearch ?? updated.brief.creativeResearch,
+        },
+      }
 
     case "SET_CONCEPT_ANGLES":
       return { ...updated, concept: { ...updated.concept, angles: action.payload } }
@@ -267,6 +280,23 @@ function reducer(state: AdProject, action: Action): AdProject {
         composition: { ...updated.composition, overlayGradient: action.payload },
       }
 
+    case "SET_PRODUCT_IMAGE":
+      return {
+        ...updated,
+        composition: { ...updated.composition, productImage: action.payload },
+      }
+
+    case "UPDATE_PRODUCT_IMAGE": {
+      if (!updated.composition.productImage) return updated
+      return {
+        ...updated,
+        composition: {
+          ...updated.composition,
+          productImage: { ...updated.composition.productImage, ...action.payload },
+        },
+      }
+    }
+
     case "SET_EXPORT_URL":
       return {
         ...updated,
@@ -315,7 +345,7 @@ const UndoContext = createContext<{ canUndo: boolean; canRedo: boolean; undo: ()
 })
 
 // Actions that fire very frequently during drag/slider — debounce for history
-const HIGH_FREQ_ACTIONS = new Set(["SET_TEXT_POSITION", "UPDATE_COMPOSITION", "SET_CTA_STYLE", "SET_OVERLAY_GRADIENT"])
+const HIGH_FREQ_ACTIONS = new Set(["SET_TEXT_POSITION", "UPDATE_COMPOSITION", "SET_CTA_STYLE", "SET_OVERLAY_GRADIENT", "UPDATE_PRODUCT_IMAGE"])
 const HISTORY_LIMIT = 30
 
 export function ProjectProvider({ children }: { children: ReactNode }) {

@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
       body.contrastMethod,
       body.targetAudience,
       body.campaignGoal,
-      body.brandVoice
+      body.brandVoice,
+      body.copyDirection,
+      body.productAnalysis
     )
 
     const message = await client.messages.create({

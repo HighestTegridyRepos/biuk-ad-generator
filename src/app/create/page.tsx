@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useProject, useDispatch } from "@/lib/store"
-import { ConceptAngle, ConceptResponse } from "@/types/ad"
+import { ConceptAngle, ConceptResponse, ProductAnalysis, CreativeResearch } from "@/types/ad"
 import { useApiCall } from "@/hooks/useApiCall"
 import LoadingOverlay from "@/components/LoadingOverlay"
 import ErrorBanner from "@/components/ErrorBanner"
@@ -17,34 +17,7 @@ interface ProductData {
   category: string | null
   hero_image_url: string | null
   product_images: string[]
-  ai_analysis: {
-    productName?: string
-    targetAudience?: string
-    keySellingPoints?: string[]
-    emotionalHooks?: string[]
-    competitivePositioning?: string
-    productCategory?: string
-    pricePoint?: string
-    suggestedBrief?: string
-  } | null
-}
-
-interface ResearchData {
-  marketPositioning?: {
-    gap?: string
-    opportunity?: string
-    differentiators?: string[]
-    audienceInsights?: string
-  }
-  visualDirection?: {
-    suggestedStyles?: string[]
-    moodKeywords?: string[]
-  }
-  copyDirection?: {
-    hooks?: string[]
-    toneGuidance?: string
-  }
-  competitorBrands?: string[]
+  ai_analysis: ProductAnalysis | null
 }
 
 export default function ConceptPage() {
@@ -56,7 +29,7 @@ export default function ConceptPage() {
 
   const [productUrl, setProductUrl] = useState("")
   const [product, setProduct] = useState<ProductData | null>(null)
-  const [research, setResearch] = useState<ResearchData | null>(null)
+  const [research, setResearch] = useState<CreativeResearch | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [showManualBrief, setShowManualBrief] = useState(false)
 
@@ -80,7 +53,7 @@ export default function ConceptPage() {
       setFromCache(data.fromCache)
 
       // Auto-populate brief fields from the analysis
-      const analysis = data.product?.ai_analysis
+      const analysis = data.product?.ai_analysis as ProductAnalysis | null
       if (analysis) {
         dispatch({
           type: "SET_BRIEF",
@@ -91,6 +64,25 @@ export default function ConceptPage() {
           },
         })
       }
+
+      // Persist analysis + research + product images in the reducer
+      dispatch({
+        type: "SET_PRODUCT_DATA",
+        payload: {
+          productAnalysis: analysis || undefined,
+          creativeResearch: (data.research as CreativeResearch) || undefined,
+        },
+      })
+
+      // Store product images for use in compose step
+      dispatch({
+        type: "SET_BRIEF",
+        payload: {
+          productImages: data.product?.product_images || [],
+          productHeroUrl: data.product?.hero_image_url || null,
+          productCutoutUrl: data.product?.cutout_image_url || null,
+        },
+      })
     })
   }, [productUrl, executeScrape, dispatch])
 
@@ -106,6 +98,8 @@ export default function ConceptPage() {
           targetAudience: project.brief.targetAudience,
           campaignGoal: project.brief.campaignGoal,
           brandVoice: project.brief.brandVoice,
+          productAnalysis: project.brief.productAnalysis,
+          creativeResearch: project.brief.creativeResearch,
         }),
       })
       if (!res.ok) {

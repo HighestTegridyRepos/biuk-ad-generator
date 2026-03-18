@@ -65,6 +65,8 @@ export default function CopyPage() {
           targetAudience: project.brief.targetAudience,
           campaignGoal: project.brief.campaignGoal,
           brandVoice: project.brief.brandVoice,
+          copyDirection: project.brief.creativeResearch?.copyDirection,
+          productAnalysis: project.brief.productAnalysis,
         }),
       })
       if (!res.ok) {

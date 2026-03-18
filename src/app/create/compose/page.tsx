@@ -18,6 +18,11 @@ export default function ComposePage() {
 
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [dragTarget, setDragTarget] = useState<"text" | "product">("text")
+
+  // Product image from scraped data
+  const productImageUrl = project.brief.productCutoutUrl || project.brief.productHeroUrl
+  const productLayer = project.composition.productImage
 
   // ── Safe zone violation detection ────────────────────────────────
   const safeZoneWarning = useMemo(() => {
@@ -39,13 +44,15 @@ export default function ComposePage() {
     return { x: e.clientX, y: e.clientY }
   }
 
-  const handlePointerDown = useCallback(
+  const handleTextPointerDown = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault()
+      e.stopPropagation()
       const pos = 'touches' in e
         ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
         : { x: e.clientX, y: e.clientY }
       setDragging(true)
+      setDragTarget("text")
       setDragStart({
         x: pos.x - project.composition.textPosition.x * scale,
         y: pos.y - project.composition.textPosition.y * scale,
@@ -54,18 +61,44 @@ export default function ComposePage() {
     [project.composition.textPosition, scale]
   )
 
+  const handleProductPointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!productLayer) return
+      const pos = 'touches' in e
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY }
+      setDragging(true)
+      setDragTarget("product")
+      setDragStart({
+        x: pos.x - productLayer.position.x * scale,
+        y: pos.y - productLayer.position.y * scale,
+      })
+    },
+    [productLayer, scale]
+  )
+
   useEffect(() => {
     if (!dragging) return
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault()
       const pos = getPointerPos(e)
-      const newX = Math.max(0, Math.min(width - 100, (pos.x - dragStart.x) / scale))
-      const newY = Math.max(0, Math.min(height - 50, (pos.y - dragStart.y) / scale))
-      dispatch({
-        type: "SET_TEXT_POSITION",
-        payload: { x: Math.round(newX), y: Math.round(newY) },
-      })
+      const newX = Math.max(0, (pos.x - dragStart.x) / scale)
+      const newY = Math.max(0, (pos.y - dragStart.y) / scale)
+
+      if (dragTarget === "text") {
+        dispatch({
+          type: "SET_TEXT_POSITION",
+          payload: { x: Math.round(Math.min(newX, width - 100)), y: Math.round(Math.min(newY, height - 50)) },
+        })
+      } else {
+        dispatch({
+          type: "UPDATE_PRODUCT_IMAGE",
+          payload: { position: { x: Math.round(newX), y: Math.round(newY) } },
+        })
+      }
     }
 
     const handleUp = () => setDragging(false)
@@ -80,7 +113,7 @@ export default function ComposePage() {
       window.removeEventListener("touchmove", handleMove)
       window.removeEventListener("touchend", handleUp)
     }
-  }, [dragging, dragStart, scale, width, height, dispatch])
+  }, [dragging, dragStart, dragTarget, scale, width, height, dispatch])
 
   const gradientCSS = project.composition.overlayGradient
     ? `linear-gradient(${project.composition.overlayGradient.direction}, ${project.composition.overlayGradient.from}, ${project.composition.overlayGradient.to})`
@@ -142,6 +175,26 @@ export default function ComposePage() {
               />
             )}
 
+            {/* Product Image Layer (draggable) */}
+            {productLayer?.visible && productLayer.url && (
+              <img
+                src={productLayer.url}
+                alt="Product"
+                draggable={false}
+                onMouseDown={handleProductPointerDown}
+                onTouchStart={handleProductPointerDown}
+                className="absolute cursor-move touch-none"
+                style={{
+                  left: productLayer.position.x * scale,
+                  top: productLayer.position.y * scale,
+                  width: `${productLayer.scale * 30}%`,
+                  height: "auto",
+                  opacity: productLayer.opacity,
+                  objectFit: "contain",
+                }}
+              />
+            )}
+
             {/* Safe Zones Indicator */}
             <div
               className="pointer-events-none absolute border border-dashed border-red-500/20"
@@ -173,8 +226,8 @@ export default function ComposePage() {
             {/* Text Overlay (draggable) */}
             {project.copy.selected && (
               <div
-                onMouseDown={handlePointerDown}
-                onTouchStart={handlePointerDown}
+                onMouseDown={handleTextPointerDown}
+                onTouchStart={handleTextPointerDown}
                 className="absolute cursor-move touch-none"
                 style={{
                   left: project.composition.textPosition.x * scale,
@@ -481,6 +534,116 @@ export default function ComposePage() {
               )}
             </div>
           </div>
+
+          {/* Product Image Layer */}
+          {productImageUrl && (
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-300">Product Image</h3>
+              <div className="mt-2 space-y-3">
+                <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={!!productLayer?.visible}
+                    onChange={(e) => {
+                      if (e.target.checked && !productLayer) {
+                        dispatch({
+                          type: "SET_PRODUCT_IMAGE",
+                          payload: {
+                            url: productImageUrl,
+                            position: { x: width * 0.3, y: height * 0.3 },
+                            scale: 1,
+                            opacity: 1,
+                            visible: true,
+                          },
+                        })
+                      } else {
+                        dispatch({
+                          type: "UPDATE_PRODUCT_IMAGE",
+                          payload: { visible: e.target.checked },
+                        })
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  Show product image
+                </label>
+
+                {productLayer?.visible && (
+                  <>
+                    <div>
+                      <label className="text-xs text-zinc-500">Scale</label>
+                      <input
+                        type="range"
+                        min={10}
+                        max={200}
+                        value={Math.round((productLayer.scale || 1) * 100)}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_PRODUCT_IMAGE",
+                            payload: { scale: Number(e.target.value) / 100 },
+                          })
+                        }
+                        className="w-full"
+                      />
+                      <span className="text-xs text-zinc-500">
+                        {Math.round((productLayer.scale || 1) * 100)}%
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500">Opacity</label>
+                      <input
+                        type="range"
+                        min={10}
+                        max={100}
+                        value={Math.round((productLayer.opacity || 1) * 100)}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_PRODUCT_IMAGE",
+                            payload: { opacity: Number(e.target.value) / 100 },
+                          })
+                        }
+                        className="w-full"
+                      />
+                    </div>
+                    {project.brief.productCutoutUrl && project.brief.productHeroUrl && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() =>
+                            dispatch({
+                              type: "UPDATE_PRODUCT_IMAGE",
+                              payload: { url: project.brief.productCutoutUrl! },
+                            })
+                          }
+                          className={`flex-1 rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                            productLayer.url === project.brief.productCutoutUrl
+                              ? "border-white bg-zinc-800 text-white"
+                              : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                          }`}
+                        >
+                          Cutout
+                        </button>
+                        <button
+                          onClick={() =>
+                            dispatch({
+                              type: "UPDATE_PRODUCT_IMAGE",
+                              payload: { url: project.brief.productHeroUrl! },
+                            })
+                          }
+                          className={`flex-1 rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                            productLayer.url === project.brief.productHeroUrl
+                              ? "border-white bg-zinc-800 text-white"
+                              : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                          }`}
+                        >
+                          Original
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="rounded-lg bg-zinc-900 p-3 text-xs text-zinc-500">
             <p>

@@ -1,4 +1,4 @@
-import { ConceptAngle, ReferenceAnalysis } from "@/types/ad"
+import { ConceptAngle, ReferenceAnalysis, ProductAnalysis, CreativeResearch } from "@/types/ad"
 
 export const CONCEPT_SYSTEM_PROMPT = `You are a senior creative director at a top-tier advertising agency. You specialize in social media performance ads — ads that stop the scroll and drive action.
 
@@ -32,7 +32,9 @@ export function buildConceptUserPrompt(
   referenceAnalysis?: ReferenceAnalysis[],
   targetAudience?: string,
   campaignGoal?: string,
-  brandVoice?: string
+  brandVoice?: string,
+  productAnalysis?: ProductAnalysis,
+  creativeResearch?: CreativeResearch
 ): string {
   let prompt = `Client Brief:\n${brief}\n`
 
@@ -46,6 +48,49 @@ export function buildConceptUserPrompt(
     prompt += `\nBrand Voice: ${brandVoice}`
   }
 
+  // ── Product intelligence (from URL scrape) ──────────────────────
+  if (productAnalysis) {
+    prompt += `\n\n--- PRODUCT INTELLIGENCE ---`
+    if (productAnalysis.keySellingPoints?.length) {
+      prompt += `\nKey Selling Points:\n${productAnalysis.keySellingPoints.map(p => `• ${p}`).join("\n")}`
+    }
+    if (productAnalysis.emotionalHooks?.length) {
+      prompt += `\nEmotional Hooks (desires/fears this product activates):\n${productAnalysis.emotionalHooks.map(h => `• ${h}`).join("\n")}`
+    }
+    if (productAnalysis.competitivePositioning) {
+      prompt += `\nCompetitive Positioning: ${productAnalysis.competitivePositioning}`
+    }
+    if (productAnalysis.pricePoint) {
+      prompt += `\nPrice Tier: ${productAnalysis.pricePoint}`
+    }
+    if (productAnalysis.priceAnchor) {
+      prompt += `\nPrice Justification: ${productAnalysis.priceAnchor}`
+    }
+    if (productAnalysis.purchaseBarrier) {
+      prompt += `\nMain Purchase Barrier to Overcome: ${productAnalysis.purchaseBarrier}`
+    }
+  }
+
+  // ── Market research context ─────────────────────────────────────
+  if (creativeResearch) {
+    const mp = creativeResearch.marketPositioning
+    if (mp) {
+      prompt += `\n\n--- MARKET RESEARCH ---`
+      if (mp.gap) prompt += `\nMarket Gap: ${mp.gap}`
+      if (mp.opportunity) prompt += `\nCreative Opportunity: ${mp.opportunity}`
+      if (mp.audienceInsights) prompt += `\nAudience Insight: ${mp.audienceInsights}`
+      if (mp.differentiators?.length) {
+        prompt += `\nDifferentiators: ${mp.differentiators.join(", ")}`
+      }
+    }
+    if (creativeResearch.copyDirection?.toneGuidance) {
+      prompt += `\nTone Direction: ${creativeResearch.copyDirection.toneGuidance}`
+    }
+    if (creativeResearch.competitorBrands?.length) {
+      prompt += `\nCompetitor Brands: ${creativeResearch.competitorBrands.join(", ")} — your concepts must feel distinct from these.`
+    }
+  }
+
   if (referenceAnalysis && referenceAnalysis.length > 0) {
     prompt += `\n\nThe client provided reference ads. Here are the principles extracted:\n`
     referenceAnalysis.forEach((ref, i) => {
@@ -54,7 +99,7 @@ export function buildConceptUserPrompt(
     prompt += `\n\nGenerate concept angles that share these PRINCIPLES without copying the surface appearance. The new ads should feel like they belong in the same family as the references.`
   }
 
-  prompt += `\n\nGenerate 3 concept angles as JSON.`
+  prompt += `\n\nUsing ALL of the above context, generate 3 concept angles as JSON. Each hook must reference SPECIFIC product details — not generic benefits. The concepts should feel like they came from a strategist who deeply researched this product.`
   return prompt
 }
 
@@ -97,7 +142,8 @@ export function buildImagePromptUserPrompt(
   messageZonePosition: string,
   width: number,
   height: number,
-  contrastMethod?: string
+  contrastMethod?: string,
+  visualDirection?: CreativeResearch["visualDirection"]
 ): string {
   const aspectRatio = width === height ? "1:1" : width > height ? `${width}:${height}` : `${height}:${width} (portrait)`
 
@@ -123,6 +169,24 @@ CRITICAL: The ${messageZonePosition} must be a clean, low-detail area suitable f
     }
     const hint = contrastHint[contrastMethod]
     if (hint) prompt += `\n\nContrast method: ${contrastMethod}. ${hint}`
+  }
+
+  // ── Visual direction from product research ──────────────────────
+  if (visualDirection) {
+    prompt += `\n\n--- VISUAL DIRECTION (from product research) ---`
+    if (visualDirection.suggestedStyles?.length) {
+      prompt += `\nSuggested visual styles: ${visualDirection.suggestedStyles.join(", ")}`
+    }
+    if (visualDirection.moodKeywords?.length) {
+      prompt += `\nMood keywords: ${visualDirection.moodKeywords.join(", ")}`
+    }
+    if (visualDirection.colorPalettes?.length) {
+      prompt += `\nSuggested color palettes: ${visualDirection.colorPalettes.map(p => p.join("/")).join(" or ")}`
+    }
+    if (visualDirection.avoidPatterns?.length) {
+      prompt += `\nAVOID these visual clichés: ${visualDirection.avoidPatterns.join(", ")}`
+    }
+    prompt += `\nUse this direction to inform the mood, palette, and subject matter — but interpret it creatively, don't just list the keywords.`
   }
 
   prompt += `\n\nGenerate 3 image prompts as JSON. Remember: absolutely NO text, logos, or typography rendered in the image.`
@@ -173,7 +237,9 @@ export function buildCopyUserPrompt(
   contrastMethod?: string,
   targetAudience?: string,
   campaignGoal?: string,
-  brandVoice?: string
+  brandVoice?: string,
+  copyDirection?: CreativeResearch["copyDirection"],
+  productAnalysis?: ProductAnalysis
 ): string {
   let prompt = `Concept angle: "${concept.hook}" (${concept.mechanism})
 
@@ -197,7 +263,38 @@ The headline will appear in the ${messageZonePosition} of the image.`
   if (campaignGoal) prompt += `\nCampaign goal: ${campaignGoal}`
   if (brandVoice) prompt += `\nBrand voice: ${brandVoice}`
 
-  prompt += `\n\nWrite copy that complements the image — don't describe what the viewer can already see. Instead, speak to the desire or pain that the image activates.\n\nGenerate 3 headline variations with CTAs as JSON.`
+  // ── Copy direction from product research ────────────────────────
+  if (copyDirection) {
+    prompt += `\n\n--- COPY DIRECTION (from product research) ---`
+    if (copyDirection.toneGuidance) {
+      prompt += `\nTone: ${copyDirection.toneGuidance}`
+    }
+    if (copyDirection.hooks?.length) {
+      prompt += `\nResearched hooks for inspiration (adapt, don't copy verbatim): ${copyDirection.hooks.join(" | ")}`
+    }
+    if (copyDirection.avoidCliches?.length) {
+      prompt += `\nAVOID these category clichés: ${copyDirection.avoidCliches.join(", ")}`
+    }
+  }
+
+  // ── Product details for specific, concrete copy ─────────────────
+  if (productAnalysis) {
+    prompt += `\n\n--- PRODUCT DETAILS ---`
+    if (productAnalysis.productName) {
+      prompt += `\nProduct: ${productAnalysis.productName}`
+    }
+    if (productAnalysis.keySellingPoints?.length) {
+      prompt += `\nKey benefits: ${productAnalysis.keySellingPoints.slice(0, 3).join(", ")}`
+    }
+    if (productAnalysis.pricePoint) {
+      prompt += `\nPrice tier: ${productAnalysis.pricePoint}`
+    }
+    if (productAnalysis.purchaseBarrier) {
+      prompt += `\nBarrier to address: ${productAnalysis.purchaseBarrier}`
+    }
+  }
+
+  prompt += `\n\nWrite copy that complements the image — don't describe what the viewer can already see. Instead, speak to the desire or pain that the image activates. Use SPECIFIC product details in your headlines, not generic benefits.\n\nGenerate 3 headline variations with CTAs as JSON.`
   return prompt
 }
 
