@@ -157,8 +157,9 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Background removal is handled on-demand via POST /api/remove-background
-    // (too heavy for fire-and-forget in serverless — ONNX model is ~40MB)
+    // Background removal is handled on-demand via /api/remove-background
+    // (uses Gemini Nano Banana Pro, no extra API key needed).
+    // The user triggers it from the Compose step when they want a cutout.
 
     return NextResponse.json({
       product: product || productData,
