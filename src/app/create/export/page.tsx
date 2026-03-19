@@ -465,7 +465,7 @@ export default function ExportPage() {
       {/* ── 2x2 Grid Preview ──────────────────────────────────── */}
       {comboUrls.length > 0 && (
         <div className="mt-8">
-          <div className={`grid gap-6 max-w-3xl mx-auto ${comboUrls.length === 4 ? "grid-cols-2" : "grid-cols-1 max-w-sm"}`}>
+          <div className={`grid gap-4 sm:gap-6 max-w-3xl mx-auto ${comboUrls.length === 4 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 max-w-sm"}`}>
             {comboUrls.map((combo, idx) => (
               <div key={idx} className="flex flex-col items-center">
                 <div className="overflow-hidden rounded-lg border border-zinc-700" style={{

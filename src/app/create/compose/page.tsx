@@ -284,7 +284,7 @@ export default function ComposePage() {
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         {/* ── Canvas Preview ──────────────────────────────────────── */}
         <div className="flex justify-center overflow-auto">
           <div

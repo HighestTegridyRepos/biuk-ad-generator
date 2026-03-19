@@ -2,10 +2,12 @@
 
 import { memo } from "react"
 import { useProject, useDispatch } from "@/lib/store"
+import { useDebouncedDispatch } from "@/hooks/useDebouncedDispatch"
 
 export default memo(function TextStylePanel() {
   const project = useProject()
   const dispatch = useDispatch()
+  const dDispatch = useDebouncedDispatch(dispatch)
 
   return (
     <>
@@ -69,7 +71,7 @@ export default memo(function TextStylePanel() {
             <input
               type="range" min={24} max={120}
               value={project.composition.headlineFontSize}
-              onChange={(e) => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineFontSize: Number(e.target.value) } })}
+              onChange={(e) => dDispatch({ type: "UPDATE_COMPOSITION", payload: { headlineFontSize: Number(e.target.value) } })}
               className="w-full"
             />
             <span className="text-xs text-zinc-500">{project.composition.headlineFontSize}px</span>
@@ -158,14 +160,14 @@ export default memo(function TextStylePanel() {
           <div>
             <label className="text-xs text-zinc-500">Font Size</label>
             <input type="range" min={14} max={48} value={project.composition.ctaStyle.fontSize}
-              onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { fontSize: Number(e.target.value) } })}
+              onChange={(e) => dDispatch({ type: "SET_CTA_STYLE", payload: { fontSize: Number(e.target.value) } })}
               className="w-full" />
             <span className="text-xs text-zinc-500">{project.composition.ctaStyle.fontSize}px</span>
           </div>
           <div>
             <label className="text-xs text-zinc-500">Border Radius</label>
             <input type="range" min={0} max={32} value={project.composition.ctaStyle.borderRadius}
-              onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { borderRadius: Number(e.target.value) } })}
+              onChange={(e) => dDispatch({ type: "SET_CTA_STYLE", payload: { borderRadius: Number(e.target.value) } })}
               className="w-full" />
           </div>
         </div>

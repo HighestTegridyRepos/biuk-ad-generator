@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useProject, useDispatch } from "@/lib/store"
+import { useDebouncedDispatch } from "@/hooks/useDebouncedDispatch"
 
 export default memo(function ProductImageControls() {
   const project = useProject()
   const dispatch = useDispatch()
+  const dDispatch = useDebouncedDispatch(dispatch)
   const [removingBg, setRemovingBg] = useState(false)
   const [bgRemovalFailed, setBgRemovalFailed] = useState(false)
   const autoTriedRef = useRef(false)
@@ -89,14 +91,14 @@ export default memo(function ProductImageControls() {
             <div>
               <label className="text-xs text-zinc-500">Scale</label>
               <input type="range" min={10} max={200} value={Math.round((productLayer.scale || 1) * 100)}
-                onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { scale: Number(e.target.value) / 100 } })}
+                onChange={(e) => dDispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { scale: Number(e.target.value) / 100 } })}
                 className="w-full" />
               <span className="text-xs text-zinc-500">{Math.round((productLayer.scale || 1) * 100)}%</span>
             </div>
             <div>
               <label className="text-xs text-zinc-500">Opacity</label>
               <input type="range" min={10} max={100} value={Math.round((productLayer.opacity || 1) * 100)}
-                onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { opacity: Number(e.target.value) / 100 } })}
+                onChange={(e) => dDispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { opacity: Number(e.target.value) / 100 } })}
                 className="w-full" />
             </div>
             <div>
@@ -108,7 +110,7 @@ export default memo(function ProductImageControls() {
                 )}
               </div>
               <input type="range" min={-180} max={180} value={productLayer.rotation || 0}
-                onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { rotation: Number(e.target.value) } })}
+                onChange={(e) => dDispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { rotation: Number(e.target.value) } })}
                 className="w-full" />
               <span className="text-xs text-zinc-500">{productLayer.rotation || 0}&deg;</span>
             </div>
