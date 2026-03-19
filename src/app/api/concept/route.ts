@@ -4,14 +4,26 @@ import { CONCEPT_SYSTEM_PROMPT, buildConceptUserPrompt } from "@/lib/prompts"
 import { ConceptRequest, ConceptResponse } from "@/types/ad"
 import { extractJSON } from "@/lib/parse-json"
 import { hashKey, getCachedConcepts, setCachedConcepts } from "@/lib/cache"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
+import { MAX_BRIEF_LENGTH } from "@/lib/constants"
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 20 req/min
+    const { allowed } = rateLimit("concept", 20, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const body: ConceptRequest = await req.json()
 
     // ── Input validation ───────────────────────────────────────
     if (!body.brief || typeof body.brief !== "string") {
       return NextResponse.json({ error: "A brief (string) is required" }, { status: 400 })
+    }
+    if (body.brief.length > MAX_BRIEF_LENGTH) {
+      return NextResponse.json({ error: "Brief is too long (max 5000 characters)" }, { status: 400 })
     }
 
     // ── Check cache first ────────────────────────────────────────
@@ -50,9 +62,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parsed)
   } catch (error) {
     console.error("Concept generation error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to generate concepts" },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }

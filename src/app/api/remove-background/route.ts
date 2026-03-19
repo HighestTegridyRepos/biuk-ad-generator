@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getGeminiClient, NANO_BANANA_2 } from "@/lib/gemini"
 import { getSupabase } from "@/lib/supabase"
 import { v4 as uuid } from "uuid"
+import { validateExternalUrl } from "@/lib/url-validation"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
 
 // Allow up to 60s — image generation can be slow
 export const maxDuration = 60
@@ -18,6 +21,12 @@ export const maxDuration = 60
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 10 req/min
+    const { allowed } = rateLimit("remove-background", 10, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const { imageUrl, productId } = await req.json()
 
     if (!imageUrl || typeof imageUrl !== "string") {
@@ -27,28 +36,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── SSRF protection: block internal/private network URLs ──────
-    try {
-      const parsed = new URL(imageUrl)
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        return NextResponse.json({ error: "Only http/https URLs are allowed" }, { status: 400 })
-      }
-      const hostname = parsed.hostname.toLowerCase()
-      if (
-        hostname === "localhost" ||
-        hostname === "127.0.0.1" ||
-        hostname === "0.0.0.0" ||
-        hostname.startsWith("10.") ||
-        hostname.startsWith("172.") ||
-        hostname.startsWith("192.168.") ||
-        hostname.startsWith("169.254.") ||
-        hostname.endsWith(".internal") ||
-        hostname.endsWith(".local")
-      ) {
-        return NextResponse.json({ error: "Internal URLs are not allowed" }, { status: 400 })
-      }
-    } catch {
-      return NextResponse.json({ error: "Invalid URL" }, { status: 400 })
+    // ── SSRF protection ──────────────────────────────────────────
+    const validation = validateExternalUrl(imageUrl)
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 })
     }
 
     // ── Download the source image ────────────────────────────────
@@ -162,14 +153,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ cutoutUrl })
   } catch (error) {
     console.error("Background removal error:", error)
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Background removal failed",
-      },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }

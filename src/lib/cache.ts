@@ -1,6 +1,14 @@
 import { getSupabase } from "@/lib/supabase"
 
 /**
+ * Delete a cache entry by table and key.
+ */
+export async function deleteCache(table: "concept_cache" | "prompt_cache" | "copy_cache", cacheKey: string) {
+  const supabase = getSupabase()
+  await supabase.from(table).delete().eq("cache_key", cacheKey)
+}
+
+/**
  * Simple hash for cache keys — deterministic, fast, good enough for dedup.
  * Not cryptographic. Uses djb2 algorithm.
  */

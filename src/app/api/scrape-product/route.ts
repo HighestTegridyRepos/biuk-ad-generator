@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabase, normalizeUrl } from "@/lib/supabase"
 import { GEMINI_PRO, generateText } from "@/lib/gemini"
 import { extractJSON } from "@/lib/parse-json"
+import { validateExternalUrl } from "@/lib/url-validation"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
+import { MAX_URL_LENGTH } from "@/lib/constants"
 
 /**
  * POST /api/scrape-product
@@ -10,10 +14,20 @@ import { extractJSON } from "@/lib/parse-json"
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 10 req/min
+    const { allowed } = rateLimit("scrape-product", 10, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const { url } = await req.json()
 
     if (!url || typeof url !== "string") {
       return NextResponse.json({ error: "A product URL is required" }, { status: 400 })
+    }
+
+    if (url.length > MAX_URL_LENGTH) {
+      return NextResponse.json({ error: "URL is too long (max 2048 characters)" }, { status: 400 })
     }
 
     // Validate URL
@@ -24,23 +38,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 })
     }
 
-    // ── SSRF protection: block internal/private network URLs ──────
-    const hostname = parsedUrl.hostname.toLowerCase()
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "0.0.0.0" ||
-      hostname.startsWith("10.") ||
-      hostname.startsWith("172.") ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("169.254.") ||
-      hostname.endsWith(".internal") ||
-      hostname.endsWith(".local")
-    ) {
-      return NextResponse.json({ error: "Internal URLs are not allowed" }, { status: 400 })
-    }
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return NextResponse.json({ error: "Only http/https URLs are allowed" }, { status: 400 })
+    // ── SSRF protection ──────────────────────────────────────────
+    const validation = validateExternalUrl(parsedUrl.href)
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 })
     }
 
     const normalized = normalizeUrl(parsedUrl.href)
@@ -170,10 +171,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error("Product scrape error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to analyze product" },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }
 

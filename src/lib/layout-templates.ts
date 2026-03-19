@@ -51,7 +51,8 @@ export const layoutTemplates: LayoutTemplate[] = [
     id: "center-overlay",
     name: "Center Overlay",
     description: "Anchor full bleed, Message centered with backdrop",
-    getZones: (w, h, sz) => ({
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    getZones: (w, h, _sz) => ({
       anchorZone: { x: 0, y: 0, width: w, height: h },
       messageZone: { x: w * 0.15, y: h * 0.35, width: w * 0.7, height: h * 0.3 },
     }),

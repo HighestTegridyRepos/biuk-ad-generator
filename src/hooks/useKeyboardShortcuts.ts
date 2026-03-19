@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
 
 /**
  * Keyboard shortcuts for step navigation and quick actions.

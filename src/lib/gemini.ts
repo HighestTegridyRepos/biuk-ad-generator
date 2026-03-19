@@ -40,17 +40,45 @@ export const IMAGE_MODEL = NANO_BANANA_PRO
 
 const DEFAULT_TIMEOUT_MS = 30_000 // 30 seconds
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`AI request timed out after ${ms / 1000}s. Please try again.`)),
       ms
     )
+
+    // Support external abort signals
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        clearTimeout(timer)
+        reject(new DOMException("Aborted", "AbortError"))
+      }, { once: true })
+    }
+
     promise.then(
       (v) => { clearTimeout(timer); resolve(v) },
       (e) => { clearTimeout(timer); reject(e) },
     )
   })
+}
+
+// ── Retry logic for transient Gemini errors ──────────────────────
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, baseDelay = 1000): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      const isRetryable = err instanceof Error &&
+        (err.message.includes("503") ||
+         err.message.includes("429") ||
+         err.message.includes("RESOURCE_EXHAUSTED") ||
+         err.message.includes("overloaded"))
+      if (!isRetryable || attempt === maxRetries) throw err
+      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, attempt)))
+    }
+  }
+  throw new Error("Retry exhausted")
 }
 
 // ── Helper: text generation ───────────────────────────────────────
@@ -63,26 +91,30 @@ export async function generateText(
   model: string,
   systemPrompt: string,
   userPrompt: string,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<string> {
-  const ai = getGeminiClient()
+  return withRetry(async () => {
+    const ai = getGeminiClient()
 
-  const response = await withTimeout(
-    ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      config: {
-        systemInstruction: systemPrompt,
-      },
-    }),
-    timeoutMs
-  )
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction: systemPrompt,
+        },
+      }),
+      timeoutMs,
+      signal
+    )
 
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) {
-    throw new Error("AI returned an empty response")
-  }
-  return text
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) {
+      throw new Error("AI returned an empty response")
+    }
+    return text
+  })
 }
 
 /**
@@ -95,32 +127,36 @@ export async function describeImageWithVision(
   mediaType: string,
   systemPrompt: string,
   userPrompt: string,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<string> {
-  const ai = getGeminiClient()
+  return withRetry(async () => {
+    const ai = getGeminiClient()
 
-  const response = await withTimeout(
-    ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: mediaType, data: base64 } },
-            { text: userPrompt },
-          ],
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: mediaType, data: base64 } },
+              { text: userPrompt },
+            ],
+          },
+        ],
+        config: {
+          systemInstruction: systemPrompt,
         },
-      ],
-      config: {
-        systemInstruction: systemPrompt,
-      },
-    }),
-    timeoutMs
-  )
+      }),
+      timeoutMs,
+      signal
+    )
 
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) {
-    throw new Error("AI returned an empty response")
-  }
-  return text
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) {
+      throw new Error("AI returned an empty response")
+    }
+    return text
+  })
 }

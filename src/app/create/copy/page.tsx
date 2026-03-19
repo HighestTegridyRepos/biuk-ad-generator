@@ -39,7 +39,8 @@ export default function CopyPage() {
       project.uploadedImage.aiDescription !== prevAiDesc.current &&
       !userEdited
     ) {
-      setImageDescription(project.uploadedImage.aiDescription)
+      // Defer setState to avoid synchronous-in-effect warning
+      queueMicrotask(() => setImageDescription(project.uploadedImage.aiDescription!))
     }
     prevAiDesc.current = project.uploadedImage.aiDescription
   }, [project.uploadedImage.aiDescription, userEdited])

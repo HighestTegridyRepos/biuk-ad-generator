@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getGeminiClient, IMAGE_MODEL } from "@/lib/gemini"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
+import { MAX_PROMPT_LENGTH } from "@/lib/constants"
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 15 req/min (most expensive)
+    const { allowed } = rateLimit("generate-image", 15, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const { prompt } = await req.json()
 
     if (!prompt || typeof prompt !== "string") {
       return NextResponse.json(
         { error: "A prompt string is required" },
+        { status: 400 }
+      )
+    }
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      return NextResponse.json(
+        { error: "Prompt is too long (max 10000 characters)" },
         { status: 400 }
       )
     }
@@ -54,8 +69,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ imageUrl: dataUrl })
   } catch (err: unknown) {
     console.error("Image generation error:", err)
-    const message =
-      err instanceof Error ? err.message : "Image generation failed"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(err)
   }
 }

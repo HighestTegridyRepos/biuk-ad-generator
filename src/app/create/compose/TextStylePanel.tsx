@@ -1,8 +1,9 @@
 "use client"
 
+import { memo } from "react"
 import { useProject, useDispatch } from "@/lib/store"
 
-export default function TextStylePanel() {
+export default memo(function TextStylePanel() {
   const project = useProject()
   const dispatch = useDispatch()
 
@@ -195,4 +196,4 @@ export default function TextStylePanel() {
       </div>
     </>
   )
-}
+})

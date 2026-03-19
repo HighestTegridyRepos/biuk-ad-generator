@@ -4,7 +4,6 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useProject, useDispatch, useHydrated } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
-import ErrorBanner from "@/components/ErrorBanner"
 
 async function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
   const buffer = await file.arrayBuffer()
@@ -188,7 +187,7 @@ export default function UploadPage() {
     await Promise.allSettled(
       variations.map((prompt, i) => generateOne(prompt, i))
     )
-  }, [selectedPrompt, generateOne, variationStyle])
+  }, [selectedPrompt, generateOne, variationStyle, dispatch])
 
   const generateAllRef = useRef(generateAll)
   generateAllRef.current = generateAll

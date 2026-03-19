@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useReducer, useEffect, useState, useRef, ReactNode, Dispatch, useCallback } from "react"
 import { v4 as uuid } from "uuid"
-import { AdProject, ConceptAngle, CopyVariation, Platform, Rect, ContrastMethod, CTAStyle, GradientConfig, ProductAnalysis, CreativeResearch, ProductImageLayer } from "@/types/ad"
+import { AdProject, ConceptAngle, CopyVariation, Platform, ContrastMethod, CTAStyle, GradientConfig, ProductAnalysis, CreativeResearch, ProductImageLayer } from "@/types/ad"
 
 // Batch image keys for IndexedDB
 function batchImgKey(index: number) {
@@ -527,11 +527,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       saveImage(IMG_KEY_UPLOADED, action.payload.url).catch(console.warn)
     }
     if (action.type === "TOGGLE_BATCH_IMAGE" && action.payload.url) {
-      // Save batch images to IndexedDB
-      const newState = reducer(stateRef.current, action)
-      newState.batch.images.forEach((img, i) => {
-        if (img.url) saveImage(batchImgKey(i), img.url).catch(console.warn)
-      })
+      // Batch image save is handled by the useEffect below
     }
     if (action.type === "SET_EXPORT_URL") {
       saveImage(IMG_KEY_EXPORT, action.payload).catch(console.warn)
@@ -554,6 +550,19 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveToLocalStorage(state)
   }, [state])
+
+  // Persist batch images to IndexedDB when they change
+  const prevBatchImagesRef = useRef(state.batch.images)
+  useEffect(() => {
+    if (state.batch.images !== prevBatchImagesRef.current) {
+      prevBatchImagesRef.current = state.batch.images
+      state.batch.images.forEach((img, i) => {
+        if (img.url && !img.url.startsWith("__IDB")) {
+          saveImage(batchImgKey(i), img.url).catch(console.warn)
+        }
+      })
+    }
+  }, [state.batch.images])
 
   // Hydrate images from IndexedDB on mount
   useEffect(() => {

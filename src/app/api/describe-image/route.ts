@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { GEMINI_FLASH, describeImageWithVision } from "@/lib/gemini"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
+import { MAX_IMAGE_BASE64_SIZE } from "@/lib/constants"
 
 const SYSTEM_PROMPT = `You are describing an ad image for a copywriter. Your description will be used to write headlines that COMPLEMENT the image — not repeat it.
 
@@ -9,13 +12,19 @@ Do NOT describe text, logos, or UI elements if present — only the visual conte
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 30 req/min
+    const { allowed } = rateLimit("describe-image", 30, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const { image, mediaType } = await req.json()
 
     if (!image || typeof image !== "string") {
       return NextResponse.json({ error: "Base64 image data is required" }, { status: 400 })
     }
     // Block oversized payloads (base64 ~= 1.33x raw size, so 7MB base64 ≈ 5MB image)
-    if (image.length > 7 * 1024 * 1024) {
+    if (image.length > MAX_IMAGE_BASE64_SIZE) {
       return NextResponse.json({ error: "Image too large — must be under 5MB" }, { status: 413 })
     }
 
@@ -30,9 +39,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ description: description.trim() })
   } catch (error) {
     console.error("Image description error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to describe image" },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }

@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, memo } from "react"
 import { useProject } from "@/lib/store"
 
-export default function BatchPreviewGrid() {
+export default memo(function BatchPreviewGrid() {
   const project = useProject()
 
   const { width, height } = project.format
@@ -40,7 +40,7 @@ export default function BatchPreviewGrid() {
                 style={{ aspectRatio: `${width}/${height}`, maxWidth: width * miniScale, maxHeight: height * miniScale }}>
                 {/* Background */}
                 {batchImg.url && (
-                  <img src={batchImg.url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+                  <img src={batchImg.url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} loading="lazy" decoding="async" />
                 )}
                 {/* Gradient */}
                 {gradientCSS && <div className="absolute inset-0" style={{ background: gradientCSS }} />}
@@ -118,4 +118,4 @@ export default function BatchPreviewGrid() {
       </div>
     </div>
   )
-}
+})

@@ -23,7 +23,7 @@ export default function LoadingOverlay({
   }
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
+    <div className="animate-fade-in absolute inset-0 z-20 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-4 rounded-xl bg-zinc-900/90 px-8 py-6 shadow-lg">
         <div className="spinner spinner-lg" />
         <p className="text-sm font-medium text-zinc-200">{message}</p>

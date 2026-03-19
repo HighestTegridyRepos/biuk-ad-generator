@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useProject, useDispatch } from "@/lib/store"
 
-export default function ProductImageControls() {
+export default memo(function ProductImageControls() {
   const project = useProject()
   const dispatch = useDispatch()
   const [removingBg, setRemovingBg] = useState(false)
@@ -151,4 +151,4 @@ export default function ProductImageControls() {
       </div>
     </div>
   )
-}
+})

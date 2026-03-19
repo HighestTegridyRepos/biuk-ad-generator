@@ -10,6 +10,7 @@ interface TransformBoxProps {
   size: { width: number; height: number }
   scale: number
   onMove: (pos: { x: number; y: number }) => void
+  onMoveEnd?: () => void
   onResize: (rect: { x: number; y: number; width: number; height: number }) => void
   onSelect: () => void
   minSize?: { width: number; height: number }
@@ -45,6 +46,7 @@ export default function TransformBox({
   size,
   scale,
   onMove,
+  onMoveEnd,
   onResize,
   onSelect,
   minSize = { width: 40, height: 20 },
@@ -182,7 +184,10 @@ export default function TransformBox({
       })
     }
 
-    const handlePointerUp = () => setDragState(null)
+    const handlePointerUp = () => {
+      if (dragState?.type === "move") onMoveEnd?.()
+      setDragState(null)
+    }
 
     window.addEventListener("mousemove", handlePointerMove)
     window.addEventListener("mouseup", handlePointerUp)
@@ -194,7 +199,7 @@ export default function TransformBox({
       window.removeEventListener("touchmove", handlePointerMove)
       window.removeEventListener("touchend", handlePointerUp)
     }
-  }, [dragState, scale, onMove, onResize, canvasSize, lockAspectRatio, minSize])
+  }, [dragState, scale, onMove, onMoveEnd, onResize, canvasSize, lockAspectRatio, minSize])
 
   const handles = getHandlePositions(screenW, screenH)
 

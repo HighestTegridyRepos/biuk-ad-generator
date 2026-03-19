@@ -4,9 +4,17 @@ import { COPY_SYSTEM_PROMPT, buildCopyUserPrompt } from "@/lib/prompts"
 import { CopyRequest, CopyResponse } from "@/types/ad"
 import { extractJSON } from "@/lib/parse-json"
 import { hashKey, getCachedCopy, setCachedCopy } from "@/lib/cache"
+import { rateLimit } from "@/lib/rate-limit"
+import { errorResponse } from "@/lib/api-error"
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 20 req/min
+    const { allowed } = rateLimit("copy", 20, 60_000)
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 })
+    }
+
     const body: CopyRequest = await req.json()
 
     // ── Input validation ───────────────────────────────────────
@@ -58,9 +66,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parsed)
   } catch (error) {
     console.error("Copy generation error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to generate copy" },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }

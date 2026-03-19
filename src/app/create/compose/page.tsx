@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useProject, useDispatch, useUndo } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
+import { getSnapGuides, GuideLine } from "@/lib/snap-guides"
 import TextStylePanel from "./TextStylePanel"
 import ProductImageControls from "./ProductImageControls"
 import BatchPreviewGrid from "./BatchPreviewGrid"
@@ -16,22 +17,32 @@ export default function ComposePage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
-  const { undo, redo } = useUndo()
+  const { canUndo, canRedo, undo, redo } = useUndo()
   const previewRef = useRef<HTMLDivElement>(null)
 
   const { width, height } = project.format
-  const scale = getPreviewScale(width, height)
+  const autoScale = getPreviewScale(width, height)
+  const [zoomLevel, setZoomLevel] = useState<number | null>(null) // null = auto-fit
+  const scale = zoomLevel ?? autoScale
 
   const [editing, setEditing] = useState<EditingField>(null)
   const [selectedElement, setSelectedElement] = useState<"text" | "product" | null>("text")
   const editRef = useRef<HTMLDivElement>(null)
+  const [guides, setGuides] = useState<GuideLine[]>([])
 
   // Text block size (defaults from store or fallback)
-  const textSize = project.composition.textSize || { width: width * 0.8, height: 200 }
+  const textSize = useMemo(
+    () => project.composition.textSize || { width: width * 0.8, height: 200 },
+    [project.composition.textSize, width]
+  )
 
   // Product image from scraped data
   const productImageUrl = project.brief.productCutoutUrl || project.brief.productHeroUrl
   const productLayer = project.composition.productImage
+
+  // CTA visibility
+  const showCta = !!(project.copy.selected?.cta)
+  const showSubhead = project.copy.selected?.subhead != null && project.copy.selected.subhead !== ""
 
   // Auto-enable product layer when compose loads if a product image exists but layer isn't initialized
   useEffect(() => {
@@ -51,7 +62,6 @@ export default function ComposePage() {
   }, [productImageUrl, productLayer, dispatch, width, height])
 
   // Auto-upgrade product layer to cutout when it becomes available
-  // (e.g., async cutout generation finishes after compose already loaded with hero)
   const prevCutoutUrl = useRef(project.brief.productCutoutUrl)
   useEffect(() => {
     if (
@@ -81,7 +91,6 @@ export default function ComposePage() {
   const startEditing = (field: EditingField) => {
     setEditing(field)
     setSelectedElement("text")
-    // Focus the contentEditable after React re-renders
     setTimeout(() => editRef.current?.focus(), 0)
   }
 
@@ -130,10 +139,23 @@ export default function ComposePage() {
     return () => window.removeEventListener("mousedown", handleClickOutside)
   }, [editing, finishEditing])
 
-  // ── TransformBox callbacks ──────────────────────────────────────
+  // ── TransformBox callbacks with snap guides ───────────────────
   const handleTextMove = useCallback((pos: { x: number; y: number }) => {
-    dispatch({ type: "SET_TEXT_POSITION", payload: pos })
-  }, [dispatch])
+    const snap = getSnapGuides(
+      { ...pos, width: textSize.width, height: textSize.height },
+      { width, height },
+      project.format.safeZones
+    )
+    setGuides(snap.guides)
+    dispatch({
+      type: "SET_TEXT_POSITION",
+      payload: { x: snap.snappedX ?? pos.x, y: snap.snappedY ?? pos.y },
+    })
+  }, [dispatch, textSize, width, height, project.format.safeZones])
+
+  const handleTextMoveEnd = useCallback(() => {
+    setGuides([])
+  }, [])
 
   const handleTextResize = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
     dispatch({ type: "SET_TEXT_POSITION", payload: { x: rect.x, y: rect.y } })
@@ -146,7 +168,6 @@ export default function ComposePage() {
 
   const handleProductResize = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
     dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { position: { x: rect.x, y: rect.y } } })
-    // Convert width back to scale: product renders at width * 0.3 * scale
     const baseWidth = width * 0.3
     if (baseWidth > 0) {
       dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { scale: rect.width / baseWidth } })
@@ -162,6 +183,27 @@ export default function ComposePage() {
     dispatch({ type: "SET_STEP", payload: 7 })
     router.push("/create/export")
   }
+
+  // ── Delete subhead / CTA ──────────────────────────────────────
+  const deleteSubhead = useCallback(() => {
+    if (!project.copy.selected) return
+    dispatch({ type: "SELECT_COPY", payload: { ...project.copy.selected, subhead: undefined } })
+  }, [project.copy.selected, dispatch])
+
+  const deleteCta = useCallback(() => {
+    if (!project.copy.selected) return
+    dispatch({ type: "SELECT_COPY", payload: { ...project.copy.selected, cta: "" } })
+  }, [project.copy.selected, dispatch])
+
+  const addSubhead = useCallback(() => {
+    if (!project.copy.selected) return
+    dispatch({ type: "SELECT_COPY", payload: { ...project.copy.selected, subhead: "Add your subhead" } })
+  }, [project.copy.selected, dispatch])
+
+  const addCta = useCallback(() => {
+    if (!project.copy.selected) return
+    dispatch({ type: "SELECT_COPY", payload: { ...project.copy.selected, cta: "Shop Now" } })
+  }, [project.copy.selected, dispatch])
 
   useKeyboardShortcuts({
     onNext: project.uploadedImage.url && project.copy.selected && !editing ? proceed : undefined,
@@ -179,6 +221,11 @@ export default function ComposePage() {
     }
   }, [project.format.contrastMethod])
 
+  // ── Zoom controls ─────────────────────────────────────────────
+  const zoomIn = () => setZoomLevel(Math.min((zoomLevel ?? autoScale) + 0.1, 2))
+  const zoomOut = () => setZoomLevel(Math.max((zoomLevel ?? autoScale) - 0.1, 0.2))
+  const zoomFit = () => setZoomLevel(null)
+
   return (
     <div className="step-transition mx-auto max-w-6xl px-6 py-10">
       <div className="flex items-center justify-between">
@@ -188,11 +235,36 @@ export default function ComposePage() {
             Drag to move. Double-click text to edit. Style with the panel on the right.
           </p>
         </div>
-        {selectedElement && (
-          <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)]">
-            {selectedElement === "text" ? "Text selected" : "Product selected"}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Undo/Redo buttons */}
+          <div className="flex gap-1">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+              className="rounded-md border border-zinc-700 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.69 3L3 13" />
+              </svg>
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+              className="rounded-md border border-zinc-700 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.69 3L21 13" />
+              </svg>
+            </button>
+          </div>
+          {selectedElement && (
+            <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)]">
+              {selectedElement === "text" ? "Text selected" : "Product selected"}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Safe zone warning */}
@@ -202,9 +274,19 @@ export default function ComposePage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
+      {/* Zoom controls */}
+      <div className="mt-4 flex items-center gap-2">
+        <button onClick={zoomOut} className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800">−</button>
+        <span className="text-xs text-zinc-500">{Math.round(scale * 100)}%</span>
+        <button onClick={zoomIn} className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800">+</button>
+        {zoomLevel !== null && (
+          <button onClick={zoomFit} className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800">Fit</button>
+        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
         {/* ── Canvas Preview ──────────────────────────────────────── */}
-        <div className="flex justify-center">
+        <div className="flex justify-center overflow-auto">
           <div
             ref={previewRef}
             className="relative overflow-hidden rounded-lg border border-zinc-700"
@@ -221,6 +303,7 @@ export default function ComposePage() {
                 alt="Ad background"
                 className="absolute inset-0 h-full w-full object-cover"
                 draggable={false}
+                decoding="async"
               />
             )}
 
@@ -232,7 +315,7 @@ export default function ComposePage() {
             {/* Product Image Layer */}
             {productLayer?.visible && productLayer.url && (() => {
               const prodW = width * 0.3 * productLayer.scale
-              const prodH = prodW // approximate square; actual aspect handled by object-contain
+              const prodH = prodW
               return (
                 <TransformBox
                   selected={selectedElement === "product"}
@@ -259,6 +342,7 @@ export default function ComposePage() {
                       alt="Product"
                       draggable={false}
                       className="h-full w-full object-contain"
+                      decoding="async"
                     />
                   </div>
                 </TransformBox>
@@ -275,6 +359,18 @@ export default function ComposePage() {
                 height: (height - project.format.safeZones.top - project.format.safeZones.bottom) * scale,
               }}
             />
+
+            {/* Snap Guides */}
+            {guides.map((g, i) => (
+              <div
+                key={i}
+                className="pointer-events-none absolute"
+                style={g.axis === "x"
+                  ? { left: g.position * scale, top: 0, width: 1, height: height * scale, background: "var(--accent)", opacity: 0.7 }
+                  : { top: g.position * scale, left: 0, height: 1, width: width * scale, background: "var(--accent)", opacity: 0.7 }
+                }
+              />
+            ))}
 
             {/* Empty state */}
             {!project.copy.selected && (
@@ -293,12 +389,13 @@ export default function ComposePage() {
                 size={textSize}
                 scale={scale}
                 onMove={handleTextMove}
+                onMoveEnd={handleTextMoveEnd}
                 onResize={handleTextResize}
                 onSelect={() => setSelectedElement("text")}
                 canvasSize={{ width, height }}
                 minSize={{ width: 80, height: 40 }}
               >
-              <div className={`${editing ? "" : ""}`} style={{ width: textSize.width * scale }}>
+              <div style={{ width: textSize.width * scale }}>
                 {/* Solid block contrast */}
                 {project.format.contrastMethod === "solid-block" && (
                   <div
@@ -353,97 +450,123 @@ export default function ComposePage() {
                     </p>
                   )}
 
-                  {/* ── Subhead (double-click to edit) ── */}
-                  {project.copy.selected.subhead != null && (
-                    editing === "subhead" ? (
-                      <div
-                        ref={editRef}
-                        contentEditable
-                        suppressContentEditableWarning
-                        onBlur={finishEditing}
-                        className="cursor-text outline-none ring-1 ring-[var(--accent)]"
-                        style={{
-                          fontSize: (project.composition.subheadFontSize || 28) * scale,
-                          color: project.composition.subheadColor || "#cccccc",
-                          fontFamily: project.composition.headlineFontFamily,
-                          fontWeight: 400,
-                          textAlign: project.composition.headlineAlign,
-                          marginTop: 4 * scale,
-                          ...contrastStyles,
-                          minWidth: 40,
-                        }}
-                        dangerouslySetInnerHTML={{ __html: project.copy.selected.subhead || "" }}
-                      />
-                    ) : (
-                      <p
-                        onDoubleClick={(e) => {
-                          e.stopPropagation()
-                          startEditing("subhead")
-                        }}
-                        className="cursor-text"
-                        title="Double-click to edit"
-                        style={{
-                          fontSize: (project.composition.subheadFontSize || 28) * scale,
-                          color: project.composition.subheadColor || "#cccccc",
-                          fontFamily: project.composition.headlineFontFamily,
-                          fontWeight: 400,
-                          textAlign: project.composition.headlineAlign,
-                          marginTop: 4 * scale,
-                          textShadow: contrastStyles.textShadow,
-                        }}
-                      >
-                        {project.copy.selected.subhead}
-                      </p>
-                    )
+                  {/* ── Subhead (double-click to edit, deletable) ── */}
+                  {showSubhead && (
+                    <div className="group relative">
+                      {editing === "subhead" ? (
+                        <div
+                          ref={editRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={finishEditing}
+                          className="cursor-text outline-none ring-1 ring-[var(--accent)]"
+                          style={{
+                            fontSize: (project.composition.subheadFontSize || 28) * scale,
+                            color: project.composition.subheadColor || "#cccccc",
+                            fontFamily: project.composition.headlineFontFamily,
+                            fontWeight: 400,
+                            textAlign: project.composition.headlineAlign,
+                            marginTop: 4 * scale,
+                            ...contrastStyles,
+                            minWidth: 40,
+                          }}
+                          dangerouslySetInnerHTML={{ __html: project.copy.selected.subhead || "" }}
+                        />
+                      ) : (
+                        <p
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            startEditing("subhead")
+                          }}
+                          className="cursor-text"
+                          title="Double-click to edit"
+                          style={{
+                            fontSize: (project.composition.subheadFontSize || 28) * scale,
+                            color: project.composition.subheadColor || "#cccccc",
+                            fontFamily: project.composition.headlineFontFamily,
+                            fontWeight: 400,
+                            textAlign: project.composition.headlineAlign,
+                            marginTop: 4 * scale,
+                            textShadow: contrastStyles.textShadow,
+                          }}
+                        >
+                          {project.copy.selected.subhead}
+                        </p>
+                      )}
+                      {/* Delete subhead button (shows on hover) */}
+                      {selectedElement === "text" && !editing && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteSubhead() }}
+                          className="absolute -right-2 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white group-hover:flex"
+                          title="Remove subhead"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   )}
 
-                  {/* ── CTA Button (double-click to edit) ── */}
-                  {editing === "cta" ? (
-                    <div
-                      ref={editRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={finishEditing}
-                      className="cursor-text outline-none ring-1 ring-[var(--accent)]"
-                      style={{
-                        marginTop: 12 * scale,
-                        display: "inline-block",
-                        backgroundColor: project.composition.ctaStyle.backgroundColor,
-                        color: project.composition.ctaStyle.textColor,
-                        borderRadius: project.composition.ctaStyle.borderRadius * scale,
-                        paddingLeft: project.composition.ctaStyle.padding.x * scale,
-                        paddingRight: project.composition.ctaStyle.padding.x * scale,
-                        paddingTop: project.composition.ctaStyle.padding.y * scale,
-                        paddingBottom: project.composition.ctaStyle.padding.y * scale,
-                        fontSize: project.composition.ctaStyle.fontSize * scale,
-                        fontWeight: 700,
-                        minWidth: 40,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: project.copy.selected.cta }}
-                    />
-                  ) : (
-                    <div
-                      onDoubleClick={(e) => {
-                        e.stopPropagation()
-                        startEditing("cta")
-                      }}
-                      className="cursor-text"
-                      title="Double-click to edit"
-                      style={{
-                        marginTop: 12 * scale,
-                        display: "inline-block",
-                        backgroundColor: project.composition.ctaStyle.backgroundColor,
-                        color: project.composition.ctaStyle.textColor,
-                        borderRadius: project.composition.ctaStyle.borderRadius * scale,
-                        paddingLeft: project.composition.ctaStyle.padding.x * scale,
-                        paddingRight: project.composition.ctaStyle.padding.x * scale,
-                        paddingTop: project.composition.ctaStyle.padding.y * scale,
-                        paddingBottom: project.composition.ctaStyle.padding.y * scale,
-                        fontSize: project.composition.ctaStyle.fontSize * scale,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {project.copy.selected.cta}
+                  {/* ── CTA Button (double-click to edit, deletable) ── */}
+                  {showCta && (
+                    <div className="group relative inline-block">
+                      {editing === "cta" ? (
+                        <div
+                          ref={editRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={finishEditing}
+                          className="cursor-text outline-none ring-1 ring-[var(--accent)]"
+                          style={{
+                            marginTop: 12 * scale,
+                            display: "inline-block",
+                            backgroundColor: project.composition.ctaStyle.backgroundColor,
+                            color: project.composition.ctaStyle.textColor,
+                            borderRadius: project.composition.ctaStyle.borderRadius * scale,
+                            paddingLeft: project.composition.ctaStyle.padding.x * scale,
+                            paddingRight: project.composition.ctaStyle.padding.x * scale,
+                            paddingTop: project.composition.ctaStyle.padding.y * scale,
+                            paddingBottom: project.composition.ctaStyle.padding.y * scale,
+                            fontSize: project.composition.ctaStyle.fontSize * scale,
+                            fontWeight: 700,
+                            minWidth: 40,
+                          }}
+                          dangerouslySetInnerHTML={{ __html: project.copy.selected.cta }}
+                        />
+                      ) : (
+                        <div
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            startEditing("cta")
+                          }}
+                          className="cursor-text"
+                          title="Double-click to edit"
+                          style={{
+                            marginTop: 12 * scale,
+                            display: "inline-block",
+                            backgroundColor: project.composition.ctaStyle.backgroundColor,
+                            color: project.composition.ctaStyle.textColor,
+                            borderRadius: project.composition.ctaStyle.borderRadius * scale,
+                            paddingLeft: project.composition.ctaStyle.padding.x * scale,
+                            paddingRight: project.composition.ctaStyle.padding.x * scale,
+                            paddingTop: project.composition.ctaStyle.padding.y * scale,
+                            paddingBottom: project.composition.ctaStyle.padding.y * scale,
+                            fontSize: project.composition.ctaStyle.fontSize * scale,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {project.copy.selected.cta}
+                        </div>
+                      )}
+                      {/* Delete CTA button */}
+                      {selectedElement === "text" && !editing && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteCta() }}
+                          className="absolute -right-2 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white group-hover:flex"
+                          title="Remove CTA"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -455,6 +578,28 @@ export default function ComposePage() {
 
         {/* ── Controls Panel ──────────────────────────────────────── */}
         <div className="space-y-5 overflow-y-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
+          {/* Add back deleted elements */}
+          {project.copy.selected && (!showSubhead || !showCta) && (
+            <div className="flex flex-wrap gap-2">
+              {!showSubhead && (
+                <button
+                  onClick={addSubhead}
+                  className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  + Add subhead
+                </button>
+              )}
+              {!showCta && (
+                <button
+                  onClick={addCta}
+                  className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  + Add CTA
+                </button>
+              )}
+            </div>
+          )}
+
           <TextStylePanel />
           <ProductImageControls />
 
