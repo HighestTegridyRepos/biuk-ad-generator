@@ -17,12 +17,16 @@ export default function CopyPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
-  const { loading, error, elapsed, execute, clearError } = useApiCall()
+  const { loading, error, elapsed, execute, abort, clearError } = useApiCall()
   const [imageDescription, setImageDescription] = useState(
     project.uploadedImage.aiDescription || ""
   )
   const [userEdited, setUserEdited] = useState(false)
-  const [feedback, setFeedback] = useState("")
+  const feedbackKey = "ad-feedback-step-5"
+  const [feedback, setFeedback] = useState(() =>
+    typeof window !== "undefined" ? sessionStorage.getItem(feedbackKey) || "" : ""
+  )
+  useEffect(() => { sessionStorage.setItem(feedbackKey, feedback) }, [feedback, feedbackKey])
   const [showFeedback, setShowFeedback] = useState(false)
   const autoFired = useRef(false)
 
@@ -135,7 +139,7 @@ export default function CopyPage() {
 
   return (
     <div className="step-transition relative mx-auto max-w-3xl px-6 py-10">
-      {loading && <LoadingOverlay message="Generating headlines…" elapsed={elapsed} />}
+      {loading && <LoadingOverlay message="Generating headlines…" elapsed={elapsed} onCancel={abort} />}
       <h1 className="text-2xl font-bold">Step 5: Headline Copy</h1>
       <p className="mt-1 text-sm text-zinc-400">
         AI analyzed your image automatically. Review the description below,
@@ -200,6 +204,11 @@ export default function CopyPage() {
       {/* Copy Variations */}
       {project.copy.variations.length > 0 && (
         <div className="mt-8 space-y-4">
+          {isBatchMode && (
+            <p className="text-xs text-zinc-500">
+              You have 2 images selected — pick 2 headlines to create a 2x2 test grid (4 ad variations).
+            </p>
+          )}
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pick Your Copy</h2>
             <div className="flex items-center gap-2">
@@ -256,7 +265,10 @@ export default function CopyPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1">
                     {isSelected && isBatchMode && (
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
+                      <div
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white"
+                        title={`This headline will be used as Headline ${batchIdx === 0 ? "A" : "B"} in your 2x2 grid`}
+                      >
                         {batchIdx + 1}
                       </div>
                     )}
@@ -279,9 +291,9 @@ export default function CopyPage() {
                       {variation.hookMechanism}
                     </span>
                     <span
-                      className={`text-xs ${hw > 6 ? "text-red-400" : "text-zinc-500"}`}
+                      className={`text-xs ${hw >= 12 ? "text-red-400" : hw >= 9 ? "text-amber-400" : "text-zinc-500"}`}
                     >
-                      {hw} words {hw > 6 && "(over limit!)"}
+                      {hw} words {hw >= 12 ? "(too long!)" : hw >= 9 ? "(long)" : ""}
                     </span>
                     <span
                       className={`text-xs ${cw > 4 ? "text-red-400" : "text-zinc-500"}`}

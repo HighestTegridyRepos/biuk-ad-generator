@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useProject, useDispatch } from "@/lib/store"
+import { useProject, useDispatch, useHydrated } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
 import ErrorBanner from "@/components/ErrorBanner"
 
@@ -20,11 +20,33 @@ interface GeneratedImage {
   error?: string
 }
 
+function PromptPreview({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = text.length > 120
+  return (
+    <div className="mt-6 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+      <div className="text-xs font-medium uppercase text-zinc-500">Your Selected Prompt</div>
+      <p className="mt-1 text-sm text-zinc-400">
+        {isLong && !expanded ? text.slice(0, 120) + "…" : text}
+      </p>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 text-xs text-zinc-500 hover:text-zinc-300"
+        >
+          {expanded ? "Collapse \u25B4" : "Show full prompt \u25BE"}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function UploadPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const hydrated = useHydrated()
 
   const [mode, setMode] = useState<"generate" | "upload">("generate")
   const [dragging, setDragging] = useState(false)
@@ -32,10 +54,31 @@ export default function UploadPage() {
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set())
   const [describing, setDescribing] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [variationStyle, setVariationStyle] = useState<"camera-color" | "identical" | "lighting">("camera-color")
   const describeAbortRef = useRef<AbortController | null>(null)
   const autoFired = useRef(false)
+  const restoredRef = useRef(false)
   const latestImageUrlRef = useRef(project.uploadedImage.url)
   latestImageUrlRef.current = project.uploadedImage.url
+
+  // Restore batch images from store on revisit (after hydration)
+  useEffect(() => {
+    if (restoredRef.current || !hydrated) return
+    if (
+      project.batch.images.length > 0 &&
+      images.length === 0 &&
+      project.batch.images[0]?.url &&
+      !project.batch.images[0].url.includes("__IDB")
+    ) {
+      restoredRef.current = true
+      const restored: GeneratedImage[] = project.batch.images.map(img => ({
+        url: img.url,
+        status: "done" as const,
+      }))
+      setImages(restored)
+      setSelectedIdxs(new Set(restored.map((_, i) => i)))
+    }
+  }, [hydrated, project.batch.images, images.length])
 
   const selectedPrompt = project.imagePrompts.prompts.find(
     (p) => p.id === project.imagePrompts.selectedPromptId
@@ -126,16 +169,26 @@ export default function UploadPage() {
 
     // Fire all 3 in parallel with slight prompt variations
     const basePrompt = selectedPrompt.text
-    const variations = [
-      basePrompt,
-      basePrompt + " — variation with slightly different camera angle and lighting mood",
-      basePrompt + " — variation with alternative color grading and atmosphere",
-    ]
+    const VARIATION_SUFFIXES: Record<typeof variationStyle, string[]> = {
+      "camera-color": [
+        "",
+        " — variation with slightly different camera angle and lighting mood",
+        " — variation with alternative color grading and atmosphere",
+      ],
+      "identical": ["", "", ""],
+      "lighting": [
+        "",
+        " — variation with dramatic side lighting and deeper shadows",
+        " — variation with soft diffused overhead lighting and muted tones",
+      ],
+    }
+    const suffixes = VARIATION_SUFFIXES[variationStyle]
+    const variations = suffixes.map(s => basePrompt + s)
 
     await Promise.allSettled(
       variations.map((prompt, i) => generateOne(prompt, i))
     )
-  }, [selectedPrompt, generateOne])
+  }, [selectedPrompt, generateOne, variationStyle])
 
   const generateAllRef = useRef(generateAll)
   generateAllRef.current = generateAll
@@ -270,11 +323,22 @@ export default function UploadPage() {
 
       {/* Selected prompt reminder */}
       {selectedPrompt && (
-        <div className="mt-6 rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-          <div className="text-xs font-medium uppercase text-zinc-500">
-            Your Selected Prompt
-          </div>
-          <p className="mt-1 text-sm text-zinc-300">{selectedPrompt.text}</p>
+        <PromptPreview text={selectedPrompt.text} />
+      )}
+
+      {/* Variation style */}
+      {selectedPrompt && (
+        <div className="mt-3 flex items-center gap-2">
+          <label className="text-xs text-zinc-500">Variation style:</label>
+          <select
+            value={variationStyle}
+            onChange={(e) => setVariationStyle(e.target.value as typeof variationStyle)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300"
+          >
+            <option value="camera-color">Camera angle + Color grade</option>
+            <option value="identical">Identical (A/A test)</option>
+            <option value="lighting">Lighting variations</option>
+          </select>
         </div>
       )}
 
@@ -354,6 +418,7 @@ export default function UploadPage() {
                     )
                   })}
                 </div>
+                <p className="text-xs text-zinc-500 text-center">Pick 2 images to create a 2x2 batch with your headlines — or pick 1 for a single ad.</p>
                 {selectedIdxs.size > 0 && selectedIdxs.size < 2 && (
                   <p className="mt-2 text-center text-sm text-amber-400">
                     Pick 1 more image for your 2x2 batch

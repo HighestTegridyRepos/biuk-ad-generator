@@ -13,10 +13,14 @@ export default function ImagePromptsPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
-  const { loading, error, elapsed, execute, clearError } = useApiCall()
+  const { loading, error, elapsed, execute, abort, clearError } = useApiCall()
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState("")
+  const feedbackKey = "ad-feedback-step-3"
+  const [feedback, setFeedback] = useState(() =>
+    typeof window !== "undefined" ? sessionStorage.getItem(feedbackKey) || "" : ""
+  )
+  useEffect(() => { sessionStorage.setItem(feedbackKey, feedback) }, [feedback, feedbackKey])
   const [showFeedback, setShowFeedback] = useState(false)
 
   const selectedConcept = project.concept.angles.find(
@@ -92,7 +96,7 @@ export default function ImagePromptsPage() {
 
   return (
     <div className="step-transition relative mx-auto max-w-3xl px-6 py-10">
-      {loading && <LoadingOverlay message="Generating image prompts…" elapsed={elapsed} />}
+      {loading && <LoadingOverlay message="Generating image prompts…" elapsed={elapsed} onCancel={abort} />}
       <h1 className="text-2xl font-bold">Step 3: Image Prompts</h1>
       <p className="mt-1 text-sm text-zinc-400">
         Generate image prompts based on your concept and layout. Select one

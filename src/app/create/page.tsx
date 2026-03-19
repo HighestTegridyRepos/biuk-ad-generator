@@ -24,8 +24,8 @@ export default function ConceptPage() {
   const project = useProject()
   const dispatch = useDispatch()
   const router = useRouter()
-  const { loading: scraping, error: scrapeError, elapsed: scrapeElapsed, execute: executeScrape, clearError: clearScrapeError } = useApiCall()
-  const { loading: generating, error: genError, elapsed: genElapsed, execute: executeGen, clearError: clearGenError } = useApiCall()
+  const { loading: scraping, error: scrapeError, elapsed: scrapeElapsed, execute: executeScrape, abort: abortScrape, clearError: clearScrapeError } = useApiCall()
+  const { loading: generating, error: genError, elapsed: genElapsed, execute: executeGen, abort: abortGen, clearError: clearGenError } = useApiCall()
 
   const [productUrl, setProductUrl] = useState("")
   const [product, setProduct] = useState<ProductData | null>(null)
@@ -36,9 +36,52 @@ export default function ConceptPage() {
   const [sessionStarted, setSessionStarted] = useState(false)
   // Flag to auto-fire concept generation after scrape completes
   const [pendingConceptGen, setPendingConceptGen] = useState(false)
-  const [feedback, setFeedback] = useState("")
+  const feedbackKey = "ad-feedback-step-1"
+  const [feedback, setFeedback] = useState(() =>
+    typeof window !== "undefined" ? sessionStorage.getItem(feedbackKey) || "" : ""
+  )
+  useEffect(() => { sessionStorage.setItem(feedbackKey, feedback) }, [feedback, feedbackKey])
   const [showFeedback, setShowFeedback] = useState(false)
+  const [cutoutStatus, setCutoutStatus] = useState<"idle" | "polling" | "done" | "failed">("idle")
   const cutoutPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const restoredRef = useRef(false)
+
+  // Restore state from store on revisit
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+
+    // Restore product URL
+    if (project.brief.productUrl && !productUrl) {
+      setProductUrl(project.brief.productUrl)
+    }
+
+    // Restore product card from stored analysis
+    if (project.brief.productAnalysis && !product) {
+      const analysis = project.brief.productAnalysis
+      setProduct({
+        name: analysis.productName || null,
+        brand: null,
+        description: null,
+        price: analysis.pricePoint || null,
+        currency: null,
+        category: analysis.productCategory || null,
+        hero_image_url: project.brief.productHeroUrl || null,
+        product_images: project.brief.productImages || [],
+        ai_analysis: analysis,
+      })
+    }
+
+    // Restore research card
+    if (project.brief.creativeResearch && !research) {
+      setResearch(project.brief.creativeResearch)
+    }
+
+    // Show concepts if they exist
+    if (project.concept.angles.length > 0) {
+      setSessionStarted(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clean up cutout polling on unmount
   useEffect(() => {
@@ -50,11 +93,13 @@ export default function ConceptPage() {
   // Poll for async cutout URL (generated in background by scrape-product)
   const pollForCutout = useCallback((url: string) => {
     if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+    setCutoutStatus("polling")
     let attempts = 0
     cutoutPollRef.current = setInterval(async () => {
       attempts++
       if (attempts > 12) { // 60s max (12 * 5s)
         if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+        setCutoutStatus("failed")
         return
       }
       try {
@@ -68,6 +113,7 @@ export default function ConceptPage() {
         if (data.product?.cutout_image_url) {
           dispatch({ type: "SET_BRIEF", payload: { productCutoutUrl: data.product.cutout_image_url } })
           if (cutoutPollRef.current) clearInterval(cutoutPollRef.current)
+          setCutoutStatus("done")
         }
       } catch { /* non-blocking */ }
     }, 5000)
@@ -115,7 +161,7 @@ export default function ConceptPage() {
         },
       })
 
-      // Store product ID + images for use in compose step
+      // Store product ID + images + URL for use in compose step and resume
       dispatch({
         type: "SET_BRIEF",
         payload: {
@@ -123,6 +169,7 @@ export default function ConceptPage() {
           productImages: data.product?.product_images || [],
           productHeroUrl: data.product?.hero_image_url || null,
           productCutoutUrl: data.product?.cutout_image_url || null,
+          productUrl: productUrl.trim(),
         },
       })
 
@@ -216,8 +263,8 @@ export default function ConceptPage() {
 
   return (
     <div className="step-transition relative mx-auto max-w-3xl px-6 py-10">
-      {scraping && <LoadingOverlay message="Analyzing product page…" elapsed={scrapeElapsed}><p className="text-xs text-zinc-500">Scraping page, extracting data, running AI analysis</p></LoadingOverlay>}
-      {generating && <LoadingOverlay message="Generating concepts…" elapsed={genElapsed} />}
+      {scraping && <LoadingOverlay message="Analyzing product page…" elapsed={scrapeElapsed} onCancel={abortScrape}><p className="text-xs text-zinc-500">Scraping page, extracting data, running AI analysis</p></LoadingOverlay>}
+      {generating && <LoadingOverlay message="Generating concepts…" elapsed={genElapsed} onCancel={abortGen} />}
 
       <h1 className="text-2xl font-bold">Step 1: Product &amp; Concept</h1>
       <p className="mt-1 text-sm text-zinc-400">
@@ -322,6 +369,28 @@ export default function ConceptPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Cutout status */}
+          {cutoutStatus === "polling" && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+              Generating product cutout…
+            </div>
+          )}
+          {cutoutStatus === "done" && (
+            <p className="mt-3 text-xs text-emerald-400">&#10003; Cutout ready</p>
+          )}
+          {cutoutStatus === "failed" && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-amber-400">
+              Cutout generation timed out
+              <button
+                onClick={() => pollForCutout(productUrl)}
+                className="text-amber-300 underline hover:text-amber-200"
+              >
+                Retry
+              </button>
             </div>
           )}
         </div>

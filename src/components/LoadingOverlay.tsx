@@ -9,10 +9,12 @@ import { ReactNode } from "react"
 export default function LoadingOverlay({
   message = "Generating…",
   elapsed,
+  onCancel,
   children,
 }: {
   message?: string
   elapsed?: number
+  onCancel?: () => void
   children?: ReactNode
 }) {
   const formatElapsed = (ms: number) => {
@@ -29,6 +31,14 @@ export default function LoadingOverlay({
           <p className="text-xs text-zinc-500">{formatElapsed(elapsed)} elapsed</p>
         )}
         {children}
+        {onCancel && elapsed !== undefined && elapsed > 8000 && (
+          <button
+            onClick={onCancel}
+            className="text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   )

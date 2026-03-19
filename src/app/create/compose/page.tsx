@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation"
 import { useProject, useDispatch, useUndo } from "@/lib/store"
 import { getPreviewScale } from "@/lib/preview-scale"
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
+import TextStylePanel from "./TextStylePanel"
+import ProductImageControls from "./ProductImageControls"
+import BatchPreviewGrid from "./BatchPreviewGrid"
+import TransformBox from "@/components/TransformBox"
 
-type DragTarget = "text" | "product" | null
 type EditingField = "headline" | "subhead" | "cta" | null
 
 export default function ComposePage() {
@@ -19,13 +22,12 @@ export default function ComposePage() {
   const { width, height } = project.format
   const scale = getPreviewScale(width, height)
 
-  const [dragging, setDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-  const [dragTarget, setDragTarget] = useState<DragTarget>(null)
-  const [removingBg, setRemovingBg] = useState(false)
   const [editing, setEditing] = useState<EditingField>(null)
   const [selectedElement, setSelectedElement] = useState<"text" | "product" | null>("text")
   const editRef = useRef<HTMLDivElement>(null)
+
+  // Text block size (defaults from store or fallback)
+  const textSize = project.composition.textSize || { width: width * 0.8, height: 200 }
 
   // Product image from scraped data
   const productImageUrl = project.brief.productCutoutUrl || project.brief.productHeroUrl
@@ -77,7 +79,6 @@ export default function ComposePage() {
 
   // ── Inline editing ─────────────────────────────────────────────
   const startEditing = (field: EditingField) => {
-    if (dragging) return
     setEditing(field)
     setSelectedElement("text")
     // Focus the contentEditable after React re-renders
@@ -129,96 +130,28 @@ export default function ComposePage() {
     return () => window.removeEventListener("mousedown", handleClickOutside)
   }, [editing, finishEditing])
 
-  // ── Pointer-agnostic drag (mouse + touch) ───────────────────────
-  const getPointerPos = (e: MouseEvent | TouchEvent) => {
-    if ("touches" in e) {
-      return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  // ── TransformBox callbacks ──────────────────────────────────────
+  const handleTextMove = useCallback((pos: { x: number; y: number }) => {
+    dispatch({ type: "SET_TEXT_POSITION", payload: pos })
+  }, [dispatch])
+
+  const handleTextResize = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
+    dispatch({ type: "SET_TEXT_POSITION", payload: { x: rect.x, y: rect.y } })
+    dispatch({ type: "UPDATE_COMPOSITION", payload: { textSize: { width: rect.width, height: rect.height } } })
+  }, [dispatch])
+
+  const handleProductMove = useCallback((pos: { x: number; y: number }) => {
+    dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { position: pos } })
+  }, [dispatch])
+
+  const handleProductResize = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
+    dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { position: { x: rect.x, y: rect.y } } })
+    // Convert width back to scale: product renders at width * 0.3 * scale
+    const baseWidth = width * 0.3
+    if (baseWidth > 0) {
+      dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { scale: rect.width / baseWidth } })
     }
-    return { x: e.clientX, y: e.clientY }
-  }
-
-  const handleTextPointerDown = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      if (editing) return // don't start drag while editing
-      e.preventDefault()
-      e.stopPropagation()
-      setSelectedElement("text")
-      const pos =
-        "touches" in e
-          ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
-          : { x: e.clientX, y: e.clientY }
-      setDragging(true)
-      setDragTarget("text")
-      setDragStart({
-        x: pos.x - project.composition.textPosition.x * scale,
-        y: pos.y - project.composition.textPosition.y * scale,
-      })
-    },
-    [project.composition.textPosition, scale, editing]
-  )
-
-  const handleProductPointerDown = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      if (!productLayer) return
-      setSelectedElement("product")
-      if (editing) finishEditing()
-      const pos =
-        "touches" in e
-          ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
-          : { x: e.clientX, y: e.clientY }
-      setDragging(true)
-      setDragTarget("product")
-      setDragStart({
-        x: pos.x - productLayer.position.x * scale,
-        y: pos.y - productLayer.position.y * scale,
-      })
-    },
-    [productLayer, scale, editing, finishEditing]
-  )
-
-  useEffect(() => {
-    if (!dragging) return
-
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      e.preventDefault()
-      const pos = getPointerPos(e)
-      const newX = Math.max(0, (pos.x - dragStart.x) / scale)
-      const newY = Math.max(0, (pos.y - dragStart.y) / scale)
-
-      if (dragTarget === "text") {
-        dispatch({
-          type: "SET_TEXT_POSITION",
-          payload: {
-            x: Math.round(Math.min(newX, width - 100)),
-            y: Math.round(Math.min(newY, height - 50)),
-          },
-        })
-      } else if (dragTarget === "product") {
-        dispatch({
-          type: "UPDATE_PRODUCT_IMAGE",
-          payload: { position: { x: Math.round(newX), y: Math.round(newY) } },
-        })
-      }
-    }
-
-    const handleUp = () => {
-      setDragging(false)
-      setDragTarget(null)
-    }
-
-    window.addEventListener("mousemove", handleMove)
-    window.addEventListener("mouseup", handleUp)
-    window.addEventListener("touchmove", handleMove, { passive: false })
-    window.addEventListener("touchend", handleUp)
-    return () => {
-      window.removeEventListener("mousemove", handleMove)
-      window.removeEventListener("mouseup", handleUp)
-      window.removeEventListener("touchmove", handleMove)
-      window.removeEventListener("touchend", handleUp)
-    }
-  }, [dragging, dragStart, dragTarget, scale, width, height, dispatch])
+  }, [dispatch, width])
 
   const gradientCSS = project.composition.overlayGradient
     ? `linear-gradient(${project.composition.overlayGradient.direction}, ${project.composition.overlayGradient.from}, ${project.composition.overlayGradient.to})`
@@ -245,9 +178,6 @@ export default function ComposePage() {
       WebkitTextStroke: cm === "outlined-text" ? "2px rgba(0,0,0,0.5)" : undefined,
     }
   }, [project.format.contrastMethod])
-
-  // Selection ring style
-  const selectionRing = "outline outline-2 outline-[var(--accent)] outline-offset-4"
 
   return (
     <div className="step-transition mx-auto max-w-6xl px-6 py-10">
@@ -300,32 +230,40 @@ export default function ComposePage() {
             )}
 
             {/* Product Image Layer */}
-            {productLayer?.visible && productLayer.url && (
-              <div
-                onMouseDown={handleProductPointerDown}
-                onTouchStart={handleProductPointerDown}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedElement("product")
-                }}
-                className={`absolute cursor-move touch-none ${selectedElement === "product" ? selectionRing : ""}`}
-                style={{
-                  left: productLayer.position.x * scale,
-                  top: productLayer.position.y * scale,
-                  width: `${productLayer.scale * 30}%`,
-                  transform: `rotate(${productLayer.rotation || 0}deg)`,
-                  transformOrigin: "center center",
-                  opacity: productLayer.opacity,
-                }}
-              >
-                <img
-                  src={productLayer.url}
-                  alt="Product"
-                  draggable={false}
-                  className="h-auto w-full object-contain"
-                />
-              </div>
-            )}
+            {productLayer?.visible && productLayer.url && (() => {
+              const prodW = width * 0.3 * productLayer.scale
+              const prodH = prodW // approximate square; actual aspect handled by object-contain
+              return (
+                <TransformBox
+                  selected={selectedElement === "product"}
+                  position={productLayer.position}
+                  size={{ width: prodW, height: prodH }}
+                  scale={scale}
+                  onMove={handleProductMove}
+                  onResize={handleProductResize}
+                  onSelect={() => { setSelectedElement("product"); if (editing) finishEditing() }}
+                  lockAspectRatio
+                  canvasSize={{ width, height }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      transform: `rotate(${productLayer.rotation || 0}deg)`,
+                      transformOrigin: "center center",
+                      opacity: productLayer.opacity,
+                    }}
+                  >
+                    <img
+                      src={productLayer.url}
+                      alt="Product"
+                      draggable={false}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                </TransformBox>
+              )
+            })()}
 
             {/* Safe Zones Indicator */}
             <div
@@ -347,22 +285,20 @@ export default function ComposePage() {
               </div>
             )}
 
-            {/* ── Text Overlay (draggable + inline-editable) ──── */}
+            {/* ── Text Overlay (TransformBox + inline-editable) ──── */}
             {project.copy.selected && (
-              <div
-                onMouseDown={handleTextPointerDown}
-                onTouchStart={handleTextPointerDown}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedElement("text")
-                }}
-                className={`absolute touch-none ${editing ? "" : "cursor-move"} ${selectedElement === "text" ? selectionRing : ""}`}
-                style={{
-                  left: project.composition.textPosition.x * scale,
-                  top: project.composition.textPosition.y * scale,
-                  maxWidth: width * 0.8 * scale,
-                }}
+              <TransformBox
+                selected={selectedElement === "text"}
+                position={project.composition.textPosition}
+                size={textSize}
+                scale={scale}
+                onMove={handleTextMove}
+                onResize={handleTextResize}
+                onSelect={() => setSelectedElement("text")}
+                canvasSize={{ width, height }}
+                minSize={{ width: 80, height: 40 }}
               >
+              <div className={`${editing ? "" : ""}`} style={{ width: textSize.width * scale }}>
                 {/* Solid block contrast */}
                 {project.format.contrastMethod === "solid-block" && (
                   <div
@@ -512,282 +448,15 @@ export default function ComposePage() {
                   )}
                 </div>
               </div>
+              </TransformBox>
             )}
           </div>
         </div>
 
         {/* ── Controls Panel ──────────────────────────────────────── */}
         <div className="space-y-5 overflow-y-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
-          {/* Inline text editing fields */}
-          {project.copy.selected && (
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-300">Text Content</h3>
-              <div className="mt-2 space-y-2">
-                <div>
-                  <label className="text-xs text-zinc-500">Headline</label>
-                  <input
-                    type="text"
-                    value={project.copy.selected.headline}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SELECT_COPY",
-                        payload: { ...project.copy.selected!, headline: e.target.value },
-                      })
-                    }
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">Subhead</label>
-                  <input
-                    type="text"
-                    value={project.copy.selected.subhead || ""}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SELECT_COPY",
-                        payload: { ...project.copy.selected!, subhead: e.target.value || undefined },
-                      })
-                    }
-                    placeholder="Optional subhead"
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">CTA</label>
-                  <input
-                    type="text"
-                    value={project.copy.selected.cta}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SELECT_COPY",
-                        payload: { ...project.copy.selected!, cta: e.target.value },
-                      })
-                    }
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-300">Headline Style</h3>
-            <div className="mt-2 space-y-3">
-              <div>
-                <label className="text-xs text-zinc-500">Font Size</label>
-                <input
-                  type="range" min={24} max={120}
-                  value={project.composition.headlineFontSize}
-                  onChange={(e) => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineFontSize: Number(e.target.value) } })}
-                  className="w-full"
-                />
-                <span className="text-xs text-zinc-500">{project.composition.headlineFontSize}px</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-zinc-500">Weight</label>
-                  <select
-                    value={project.composition.headlineFontWeight}
-                    onChange={(e) => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineFontWeight: Number(e.target.value) } })}
-                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
-                  >
-                    {[400, 500, 600, 700, 800, 900].map((w) => (
-                      <option key={w} value={w}>{w}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">Color</label>
-                  <input
-                    type="color"
-                    value={project.composition.headlineColor}
-                    onChange={(e) => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineColor: e.target.value } })}
-                    className="mt-0.5 h-8 w-full cursor-pointer rounded border border-zinc-700"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-500">Font Family</label>
-                <select
-                  value={project.composition.headlineFontFamily}
-                  onChange={(e) => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineFontFamily: e.target.value } })}
-                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
-                >
-                  <option value="Inter, sans-serif">Inter</option>
-                  <option value="'Playfair Display', serif">Playfair Display</option>
-                  <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
-                  <option value="'Montserrat', sans-serif">Montserrat</option>
-                  <option value="'Oswald', sans-serif">Oswald</option>
-                  <option value="'Raleway', sans-serif">Raleway</option>
-                  <option value="'Roboto Condensed', sans-serif">Roboto Condensed</option>
-                  <option value="'DM Serif Display', serif">DM Serif Display</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-500">Alignment</label>
-                <div className="mt-1 flex gap-1">
-                  {(["left", "center", "right"] as const).map((align) => (
-                    <button
-                      key={align}
-                      onClick={() => dispatch({ type: "UPDATE_COMPOSITION", payload: { headlineAlign: align } })}
-                      className={`flex-1 rounded border px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                        project.composition.headlineAlign === align
-                          ? "border-white bg-zinc-800 text-white"
-                          : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                      }`}
-                    >
-                      {align}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-300">CTA Button</h3>
-            <div className="mt-2 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-zinc-500">Background</label>
-                  <input type="color" value={project.composition.ctaStyle.backgroundColor}
-                    onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { backgroundColor: e.target.value } })}
-                    className="mt-0.5 h-8 w-full cursor-pointer rounded border border-zinc-700" />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">Text Color</label>
-                  <input type="color" value={project.composition.ctaStyle.textColor}
-                    onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { textColor: e.target.value } })}
-                    className="mt-0.5 h-8 w-full cursor-pointer rounded border border-zinc-700" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">Font Size</label>
-                <input type="range" min={14} max={48} value={project.composition.ctaStyle.fontSize}
-                  onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { fontSize: Number(e.target.value) } })}
-                  className="w-full" />
-                <span className="text-xs text-zinc-500">{project.composition.ctaStyle.fontSize}px</span>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">Border Radius</label>
-                <input type="range" min={0} max={32} value={project.composition.ctaStyle.borderRadius}
-                  onChange={(e) => dispatch({ type: "SET_CTA_STYLE", payload: { borderRadius: Number(e.target.value) } })}
-                  className="w-full" />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-300">Overlay</h3>
-            <div className="mt-2 space-y-2">
-              <label className="flex items-center gap-2 text-xs text-zinc-400">
-                <input type="checkbox" checked={!!project.composition.overlayGradient}
-                  onChange={(e) => dispatch({ type: "SET_OVERLAY_GRADIENT", payload: e.target.checked
-                    ? { direction: "to top", from: "rgba(0,0,0,0.8)", to: "transparent", coverage: 50 }
-                    : undefined })}
-                  className="rounded" />
-                Gradient overlay
-              </label>
-              {project.composition.overlayGradient && (
-                <select value={project.composition.overlayGradient.direction}
-                  onChange={(e) => dispatch({ type: "SET_OVERLAY_GRADIENT", payload: { ...project.composition.overlayGradient!, direction: e.target.value } })}
-                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100">
-                  <option value="to top">Bottom to Top</option>
-                  <option value="to bottom">Top to Bottom</option>
-                  <option value="to right">Left to Right</option>
-                  <option value="to left">Right to Left</option>
-                </select>
-              )}
-            </div>
-          </div>
-
-          {/* Product Image Layer */}
-          {productImageUrl && (
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-300">Product Image</h3>
-              <div className="mt-2 space-y-3">
-                <label className="flex items-center gap-2 text-xs text-zinc-400">
-                  <input type="checkbox" checked={!!productLayer?.visible}
-                    onChange={(e) => {
-                      if (e.target.checked && !productLayer) {
-                        dispatch({ type: "SET_PRODUCT_IMAGE", payload: {
-                          url: productImageUrl, position: { x: width * 0.3, y: height * 0.3 },
-                          scale: 1, rotation: 0, opacity: 1, visible: true,
-                        }})
-                      } else {
-                        dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { visible: e.target.checked } })
-                      }
-                    }}
-                    className="rounded" />
-                  Show product image
-                </label>
-
-                {productLayer?.visible && (
-                  <>
-                    <div>
-                      <label className="text-xs text-zinc-500">Scale</label>
-                      <input type="range" min={10} max={200} value={Math.round((productLayer.scale || 1) * 100)}
-                        onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { scale: Number(e.target.value) / 100 } })}
-                        className="w-full" />
-                      <span className="text-xs text-zinc-500">{Math.round((productLayer.scale || 1) * 100)}%</span>
-                    </div>
-                    <div>
-                      <label className="text-xs text-zinc-500">Opacity</label>
-                      <input type="range" min={10} max={100} value={Math.round((productLayer.opacity || 1) * 100)}
-                        onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { opacity: Number(e.target.value) / 100 } })}
-                        className="w-full" />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs text-zinc-500">Rotation</label>
-                        {(productLayer.rotation || 0) !== 0 && (
-                          <button onClick={() => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { rotation: 0 } })}
-                            className="text-[10px] text-zinc-500 hover:text-zinc-300">Reset</button>
-                        )}
-                      </div>
-                      <input type="range" min={-180} max={180} value={productLayer.rotation || 0}
-                        onChange={(e) => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { rotation: Number(e.target.value) } })}
-                        className="w-full" />
-                      <span className="text-xs text-zinc-500">{productLayer.rotation || 0}&deg;</span>
-                    </div>
-                    {project.brief.productCutoutUrl && project.brief.productHeroUrl ? (
-                      <div className="flex gap-1">
-                        <button onClick={() => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { url: project.brief.productCutoutUrl! } })}
-                          className={`flex-1 rounded border px-2 py-1 text-xs font-medium transition-colors ${productLayer.url === project.brief.productCutoutUrl ? "border-white bg-zinc-800 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"}`}>
-                          Cutout
-                        </button>
-                        <button onClick={() => dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { url: project.brief.productHeroUrl! } })}
-                          className={`flex-1 rounded border px-2 py-1 text-xs font-medium transition-colors ${productLayer.url === project.brief.productHeroUrl ? "border-white bg-zinc-800 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"}`}>
-                          Original
-                        </button>
-                      </div>
-                    ) : project.brief.productHeroUrl && !project.brief.productCutoutUrl ? (
-                      <button disabled={removingBg}
-                        onClick={async () => {
-                          setRemovingBg(true)
-                          try {
-                            const res = await fetch("/api/remove-background", { method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ imageUrl: project.brief.productHeroUrl, productId: project.brief.productId }) })
-                            const data = await res.json()
-                            if (res.ok && data.cutoutUrl) {
-                              dispatch({ type: "SET_BRIEF", payload: { productCutoutUrl: data.cutoutUrl } })
-                              dispatch({ type: "UPDATE_PRODUCT_IMAGE", payload: { url: data.cutoutUrl } })
-                            }
-                          } catch { /* user still has original */ } finally { setRemovingBg(false) }
-                        }}
-                        className="w-full rounded border border-zinc-700 px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40">
-                        {removingBg ? "Removing background..." : "Remove Background"}
-                      </button>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
+          <TextStylePanel />
+          <ProductImageControls />
 
           <div className="rounded-lg bg-zinc-900 p-3 text-xs text-zinc-500">
             <p>Position: {project.composition.textPosition.x}, {project.composition.textPosition.y}</p>
@@ -797,102 +466,7 @@ export default function ComposePage() {
         </div>
       </div>
 
-      {/* ── 2x2 Batch Preview ──────────────────────────────────── */}
-      {project.batch.images.length === 2 && project.batch.copies.length === 2 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold">Your 2x2 Batch Preview</h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            2 images × 2 headlines = 4 ads. Your edits above apply to all 4.
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {project.batch.images.map((batchImg, imgIdx) =>
-              project.batch.copies.map((batchCopy, copyIdx) => {
-                const comboIdx = imgIdx * 2 + copyIdx
-                const isEditing = imgIdx === 0 && copyIdx === 0
-                const miniScale = Math.min(200 / width, 200 / height)
-                return (
-                  <div key={`${imgIdx}-${copyIdx}`} className={`relative overflow-hidden rounded-lg border-2 ${isEditing ? "border-[var(--accent)]" : "border-zinc-700"}`}
-                    style={{ width: width * miniScale, height: height * miniScale }}>
-                    {/* Background */}
-                    {batchImg.url && (
-                      <img src={batchImg.url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-                    )}
-                    {/* Gradient */}
-                    {gradientCSS && <div className="absolute inset-0" style={{ background: gradientCSS }} />}
-                    {/* Product image */}
-                    {productLayer?.visible && productLayer.url && (
-                      <div className="absolute" style={{
-                        left: productLayer.position.x * miniScale,
-                        top: productLayer.position.y * miniScale,
-                        width: `${productLayer.scale * 30}%`,
-                        transform: `rotate(${productLayer.rotation || 0}deg)`,
-                        opacity: productLayer.opacity,
-                      }}>
-                        <img src={productLayer.url} alt="" className="h-auto w-full object-contain" />
-                      </div>
-                    )}
-                    {/* Text overlay */}
-                    <div className="absolute" style={{
-                      left: project.composition.textPosition.x * miniScale,
-                      top: project.composition.textPosition.y * miniScale,
-                      maxWidth: width * 0.8 * miniScale,
-                    }}>
-                      {project.format.contrastMethod === "solid-block" && (
-                        <div className="pointer-events-none absolute rounded" style={{
-                          background: "rgba(0,0,0,0.7)",
-                          inset: `${-4 * miniScale}px ${-6 * miniScale}px`,
-                        }} />
-                      )}
-                      <div className="relative">
-                        <p style={{
-                          fontSize: project.composition.headlineFontSize * miniScale,
-                          fontFamily: project.composition.headlineFontFamily,
-                          fontWeight: project.composition.headlineFontWeight,
-                          color: project.composition.headlineColor,
-                          textAlign: project.composition.headlineAlign,
-                          lineHeight: 1.1,
-                          ...contrastStyles,
-                        }}>
-                          {batchCopy.headline}
-                        </p>
-                        {batchCopy.subhead && (
-                          <p style={{
-                            fontSize: (project.composition.subheadFontSize || 28) * miniScale,
-                            color: project.composition.subheadColor || "#cccccc",
-                            fontFamily: project.composition.headlineFontFamily,
-                            marginTop: 2 * miniScale,
-                          }}>
-                            {batchCopy.subhead}
-                          </p>
-                        )}
-                        <div style={{
-                          marginTop: 4 * miniScale,
-                          display: "inline-block",
-                          backgroundColor: project.composition.ctaStyle.backgroundColor,
-                          color: project.composition.ctaStyle.textColor,
-                          borderRadius: project.composition.ctaStyle.borderRadius * miniScale,
-                          paddingLeft: project.composition.ctaStyle.padding.x * miniScale,
-                          paddingRight: project.composition.ctaStyle.padding.x * miniScale,
-                          paddingTop: project.composition.ctaStyle.padding.y * miniScale,
-                          paddingBottom: project.composition.ctaStyle.padding.y * miniScale,
-                          fontSize: project.composition.ctaStyle.fontSize * miniScale,
-                          fontWeight: 700,
-                        }}>
-                          {batchCopy.cta}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Label */}
-                    <div className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${isEditing ? "bg-[var(--accent)] text-white" : "bg-zinc-800/80 text-zinc-400"}`}>
-                      {isEditing ? "Editing" : `#${comboIdx + 1}`}
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-      )}
+      <BatchPreviewGrid />
 
       {/* Navigation */}
       <div className="mt-10 flex justify-between">

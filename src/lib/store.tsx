@@ -72,6 +72,7 @@ function createDefaultProject(): AdProject {
 
     composition: {
       textPosition: { x: 60, y: 60 },
+      textSize: { width: spec.width * 0.8, height: 200 },
       headlineFontSize: 64,
       headlineFontFamily: "Inter, sans-serif",
       headlineFontWeight: 800,
@@ -214,21 +215,53 @@ function reducer(state: AdProject, action: Action): AdProject {
 
     case "SET_PLATFORM": {
       const spec = platformSpecs[action.payload]
-      return {
+      const oldW = state.format.width
+      const oldH = state.format.height
+      const newW = spec.width
+      const newH = spec.height
+      const result = {
         ...updated,
         format: {
           ...updated.format,
           platform: action.payload,
-          width: spec.width,
-          height: spec.height,
+          width: newW,
+          height: newH,
           safeZones: spec.safeZones,
           layout: {
-            anchorZone: { x: 0, y: spec.height * 0.33, width: spec.width, height: spec.height * 0.67 },
-            messageZone: { x: spec.safeZones.left, y: spec.safeZones.top, width: spec.width - spec.safeZones.left - spec.safeZones.right, height: spec.height * 0.28 },
+            anchorZone: { x: 0, y: newH * 0.33, width: newW, height: newH * 0.67 },
+            messageZone: { x: spec.safeZones.left, y: spec.safeZones.top, width: newW - spec.safeZones.left - spec.safeZones.right, height: newH * 0.28 },
             supportZone: null,
           },
         },
       }
+      // Scale product image position proportionally
+      if (result.composition.productImage) {
+        result.composition = {
+          ...result.composition,
+          productImage: {
+            ...result.composition.productImage,
+            position: {
+              x: (result.composition.productImage.position.x / oldW) * newW,
+              y: (result.composition.productImage.position.y / oldH) * newH,
+            },
+          },
+        }
+      }
+      // Scale text position and size proportionally
+      result.composition = {
+        ...result.composition,
+        textPosition: {
+          x: (result.composition.textPosition.x / oldW) * newW,
+          y: (result.composition.textPosition.y / oldH) * newH,
+        },
+        textSize: result.composition.textSize
+          ? {
+              width: (result.composition.textSize.width / oldW) * newW,
+              height: (result.composition.textSize.height / oldH) * newH,
+            }
+          : { width: newW * 0.8, height: 200 },
+      }
+      return result
     }
 
     case "SET_LAYOUT":

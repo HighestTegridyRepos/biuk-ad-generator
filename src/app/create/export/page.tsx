@@ -60,9 +60,15 @@ export default function ExportPage() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return ""
 
-    // Wait for fonts
-    if (typeof document !== "undefined" && document.fonts?.ready) {
+    // Wait for fonts — ensure the specific selected font is loaded
+    if (typeof document !== "undefined" && document.fonts) {
       await document.fonts.ready
+      const fontFamily = project.composition.headlineFontFamily.split(",")[0].trim().replace(/'/g, "")
+      try {
+        await document.fonts.load(`${project.composition.headlineFontWeight} ${project.composition.headlineFontSize}px "${fontFamily}"`)
+      } catch {
+        console.warn(`Font "${fontFamily}" not available for export, using fallback`)
+      }
     }
 
     // Draw background image
@@ -134,7 +140,7 @@ export default function ExportPage() {
     // Draw text (headline, subhead, CTA)
     const tx = project.composition.textPosition.x
     const startTy = project.composition.textPosition.y
-    const maxTextWidth = width * 0.75
+    const maxTextWidth = project.composition.textSize?.width || width * 0.75
     let measureTy = startTy
 
     ctx.font = `${project.composition.headlineFontWeight} ${project.composition.headlineFontSize}px ${project.composition.headlineFontFamily}`
@@ -360,16 +366,16 @@ export default function ExportPage() {
       {/* ── 2x2 Grid Preview ──────────────────────────────────── */}
       {comboUrls.length > 0 && (
         <div className="mt-8">
-          <div className={`grid gap-3 ${comboUrls.length === 4 ? "grid-cols-2" : "grid-cols-1 max-w-sm mx-auto"}`}>
+          <div className={`grid gap-6 max-w-3xl mx-auto ${comboUrls.length === 4 ? "grid-cols-2" : "grid-cols-1 max-w-sm"}`}>
             {comboUrls.map((combo, idx) => (
-              <div key={idx} className="group relative">
+              <div key={idx} className="flex flex-col items-center">
                 <div className="overflow-hidden rounded-lg border border-zinc-700" style={{
                   width: width * miniScale,
                   height: height * miniScale,
                 }}>
                   <img src={combo.url} alt={combo.label} className="h-full w-full object-contain" />
                 </div>
-                <div className="mt-1.5 flex items-center justify-between">
+                <div className="mt-2 flex w-full items-center justify-between" style={{ maxWidth: width * miniScale }}>
                   <span className="text-xs text-zinc-500">{combo.label}</span>
                   <button
                     onClick={() => downloadIndividual(idx)}

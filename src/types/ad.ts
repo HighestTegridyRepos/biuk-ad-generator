@@ -174,6 +174,7 @@ export interface AdProject {
     productImages?: string[]       // all scraped product image URLs
     productHeroUrl?: string | null // hero image from scrape
     productCutoutUrl?: string | null // background-removed cutout
+    productUrl?: string            // original product URL entered by user
   }
   concept: {
     angles: ConceptAngle[]
@@ -220,6 +221,7 @@ export interface AdProject {
 
   composition: {
     textPosition: { x: number; y: number }
+    textSize?: { width: number; height: number }
     headlineFontSize: number
     headlineFontFamily: string
     headlineFontWeight: number
