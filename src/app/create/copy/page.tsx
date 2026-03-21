@@ -75,6 +75,7 @@ export default function CopyPage() {
           brandVoice: project.brief.brandVoice,
           copyDirection: project.brief.creativeResearch?.copyDirection,
           productAnalysis: project.brief.productAnalysis,
+          mindstateId: project.brief.creativeResearch?.mindstateMatch?.primary,
           skipCache,
           feedback: userFeedback || undefined,
         }),

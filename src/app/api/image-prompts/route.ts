@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
       body.height,
       body.contrastMethod,
       body.visualDirection,
-      body.feedback
+      body.feedback,
+      body.mindstateId
     )
 
     const text = await generateText(GEMINI_FLASH, IMAGE_PROMPT_SYSTEM_PROMPT, userPrompt)

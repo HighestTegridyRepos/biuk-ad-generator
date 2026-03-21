@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/rate-limit"
 import { errorResponse } from "@/lib/api-error"
 import { MAX_URL_LENGTH } from "@/lib/constants"
 import { logInfo, logWarn, logRequest } from "@/lib/logger"
+import { MINDSTATE_PROFILES } from "@/lib/mindstate-data"
 
 const ROUTE_NAME = "scrape-product"
 
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
         visual_direction: (researchData as Record<string, unknown>)?.visualDirection || null,
         copy_direction: (researchData as Record<string, unknown>)?.copyDirection || null,
         competitor_brands: (researchData as Record<string, unknown>)?.competitorBrands || [],
+        mindstate_match: (researchData as Record<string, unknown>)?.mindstateMatch || null,
       })
     }
 
@@ -431,6 +433,7 @@ RULES:
 - Copy hooks must reference the SPECIFIC product/benefit: "Get results" is banned. "Your meal prep Sunday just went from 3 hours to 40 minutes" is good.
 - Avoid patterns must name the SPECIFIC cliché: "stock photo look" is vague. "Person smiling at camera with product held at chin height, white background, stock overlay text" is specific.
 - Color palettes should use descriptive modifiers: not just "blue" but "muted navy" or "electric cobalt."
+- Mindstate matching: Choose the SINGLE best-matching mindstate from the provided list that represents this buyer's primary psychological approach and motivation. Provide reasoning in 1-2 sentences.
 
 Return your research as JSON:
 {
@@ -451,7 +454,12 @@ Return your research as JSON:
     "avoidCliches": ["3-5 overused phrases/patterns in this category's advertising"],
     "toneGuidance": "Specific tone direction with examples — e.g. 'Confident but not cocky. Think friend who casually mentions their raise, not LinkedIn influencer.'"
   },
-  "competitorBrands": ["3-5 actual competitor brands in this space"]
+  "competitorBrands": ["3-5 actual competitor brands in this space"],
+  "mindstateMatch": {
+    "primary": "The best-matching mindstate ID from the list below",
+    "secondary": "Second-best match or null if unclear",
+    "reasoning": "1-2 sentences explaining why this mindstate fits this product's buyer"
+  }
 }`
 
 function buildAnalysisPrompt(
@@ -485,6 +493,21 @@ function buildResearchPrompt(
   if (aiAnalysis && typeof aiAnalysis === "object") {
     prompt += `\nAI Analysis:\n${JSON.stringify(aiAnalysis, null, 2)}\n`
   }
+
+  // Add mindstate reference list
+  prompt += `\n\nAVAILABLE MINDSTATE PROFILES:\n`
+  prompt += `The buyer likely falls into one of these psychological profiles (combination of approach + motivation):\n\n`
+
+  const approaches = { cautious: [], optimistic: [] } as Record<string, string[]>
+  MINDSTATE_PROFILES.forEach((profile: any) => {
+    const line = `- ${profile.id}: ${profile.name} — ${profile.coreDescription?.slice(0, 120)}...`
+    approaches[profile.approach].push(line)
+  })
+
+  prompt += `CAUTIOUS (Loss-Avoidance):\n${approaches.cautious.join("\n")}\n\n`
+  prompt += `OPTIMISTIC (Gain-Seeking):\n${approaches.optimistic.join("\n")}\n`
+
+  prompt += `\nSelect the ONE mindstate that best represents this product's buyer. Consider both their approach (cautious vs optimistic) and their primary motivation.`
 
   prompt += `\nPage content excerpt:\n${pageText?.slice(0, 10000) || "N/A"}`
   prompt += `\n\nProvide your creative research as JSON.`

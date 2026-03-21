@@ -399,8 +399,15 @@ export default function ConceptPage() {
       {/* ── Research Card ──────────────────────────────────────── */}
       {research && (
         <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900 p-5">
-          <div className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-            Creative Research
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+              Creative Research
+            </div>
+            {research.mindstateMatch?.primary && (
+              <div className="inline-flex rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300">
+                {research.mindstateMatch.primary.replace(/-/g, " ")}
+              </div>
+            )}
           </div>
 
           {research.marketPositioning?.opportunity && (

@@ -48,6 +48,7 @@ export default function ImagePromptsPage() {
           messageZonePosition,
           contrastMethod: project.format.contrastMethod,
           visualDirection: project.brief.creativeResearch?.visualDirection,
+          mindstateId: project.brief.creativeResearch?.mindstateMatch?.primary,
           skipCache,
           feedback: userFeedback || undefined,
         }),

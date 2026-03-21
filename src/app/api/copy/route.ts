@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
       body.brandVoice,
       body.copyDirection,
       body.productAnalysis,
-      body.feedback
+      body.feedback,
+      body.mindstateId
     )
 
     const text = await generateText(GEMINI_PRO, COPY_SYSTEM_PROMPT, userPrompt)

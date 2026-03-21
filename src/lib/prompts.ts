@@ -91,6 +91,27 @@ export function buildConceptUserPrompt(
     if (creativeResearch.competitorBrands?.length) {
       prompt += `\nCompetitor Brands: ${creativeResearch.competitorBrands.join(", ")} — your concepts must feel distinct from these.`
     }
+
+    // ── Behavioral psychology direction (from mindstate match) ────────
+    if (creativeResearch.mindstateMatch?.primary) {
+      try {
+        const { getMindstateById } = require("@/lib/mindstate-data")
+        const mindstate = getMindstateById(creativeResearch.mindstateMatch.primary)
+        if (mindstate) {
+          prompt += `\n\n--- BEHAVIORAL PSYCHOLOGY DIRECTION ---`
+          prompt += `\nBuyer Mindstate: ${mindstate.name}`
+          prompt += `\nCore Motivation: ${mindstate.coreDescription}`
+          prompt += `\nFeelings to EVOKE: ${mindstate.feelingsToEvoke.join(", ")}`
+          prompt += `\nFeelings to AVOID: ${mindstate.feelingsToAvoid.join(", ")}`
+          if (mindstate.triggers?.length) {
+            prompt += `\nCognitive Triggers: ${mindstate.triggers.slice(0, 2).join(", ")}`
+          }
+          prompt += `\n\nEnsure concepts resonate with this psychological profile. The hooks should activate the desired feelings while avoiding the negative ones.`
+        }
+      } catch {
+        // Silently continue if mindstate lookup fails
+      }
+    }
   }
 
   if (referenceAnalysis && referenceAnalysis.length > 0) {
@@ -161,7 +182,8 @@ export function buildImagePromptUserPrompt(
   height: number,
   contrastMethod?: string,
   visualDirection?: CreativeResearch["visualDirection"],
-  feedback?: string
+  feedback?: string,
+  mindstateId?: string
 ): string {
   const aspectRatio = width === height ? "1:1" : width > height ? `${width}:${height}` : `${height}:${width} (portrait)`
 
@@ -207,6 +229,23 @@ CRITICAL: The ${messageZonePosition} must be a clean, low-detail area suitable f
     prompt += `\nUse this direction to inform the mood, palette, and subject matter — but interpret it creatively, don't just list the keywords.`
   }
 
+  // ── Behavioral psychology visual direction (from mindstate) ────────
+  if (mindstateId) {
+    try {
+      const { getMindstateById } = require("@/lib/mindstate-data")
+      const mindstate = getMindstateById(mindstateId)
+      if (mindstate) {
+        prompt += `\n\n--- BEHAVIORAL PSYCHOLOGY - VISUAL DIRECTION ---`
+        prompt += `\nMindstate: ${mindstate.name}`
+        prompt += `\nFeelings to EVOKE: ${mindstate.feelingsToEvoke.join(", ")}`
+        prompt += `\nVisual Guidance: ${mindstate.visualGuidance?.slice(0, 200) || "N/A"}`
+        prompt += `\n\nIncorporate visual elements that evoke these feelings while maintaining the composition and contrast requirements above.`
+      }
+    } catch {
+      // Silently continue if mindstate lookup fails
+    }
+  }
+
   if (feedback) {
     prompt += `\n\n--- USER FEEDBACK ON PREVIOUS RESULTS ---
 The user reviewed the last set of image prompts and wasn't satisfied:
@@ -234,6 +273,7 @@ Rules:
 - Copy must COMPLEMENT the image, not repeat what's visible
 - Avoid puns, yes/no questions, superlatives without proof
 - Avoid "Elevate", "Transform", "Unlock" — overused to invisibility
+- If behavioral psychology guidance is provided, follow the copy tone and feelings directions closely
 
 Generate 3 headline variations, each using a DIFFERENT hook mechanism:
 1. One using curiosity gap, bold claim, or pattern interrupt
@@ -266,7 +306,8 @@ export function buildCopyUserPrompt(
   brandVoice?: string,
   copyDirection?: CreativeResearch["copyDirection"],
   productAnalysis?: ProductAnalysis,
-  feedback?: string
+  feedback?: string,
+  mindstateId?: string
 ): string {
   let prompt = `Concept angle: "${concept.hook}" (${concept.mechanism})
 
@@ -318,6 +359,27 @@ The headline will appear in the ${messageZonePosition} of the image.`
     }
     if (productAnalysis.purchaseBarrier) {
       prompt += `\nBarrier to address: ${productAnalysis.purchaseBarrier}`
+    }
+  }
+
+  // ── Behavioral psychology copy direction (from mindstate) ────────
+  if (mindstateId) {
+    try {
+      const { getMindstateById } = require("@/lib/mindstate-data")
+      const mindstate = getMindstateById(mindstateId)
+      if (mindstate) {
+        prompt += `\n\n--- BEHAVIORAL PSYCHOLOGY - COPY DIRECTION ---`
+        prompt += `\nMindstate: ${mindstate.name}`
+        prompt += `\nCopy Tone: ${mindstate.copyTone?.slice(0, 150) || "N/A"}`
+        prompt += `\nFeelings to EVOKE: ${mindstate.feelingsToEvoke.join(", ")}`
+        prompt += `\nFeelings to AVOID: ${mindstate.feelingsToAvoid.join(", ")}`
+        if (mindstate.exampleHeadlines?.length) {
+          prompt += `\nExample Headlines for inspiration: ${mindstate.exampleHeadlines.slice(0, 2).join(" | ")}`
+        }
+        prompt += `\n\nWrite copy that resonates with this psychological profile. The headlines should evoke the desired feelings while avoiding the negative ones.`
+      }
+    } catch {
+      // Silently continue if mindstate lookup fails
     }
   }
 

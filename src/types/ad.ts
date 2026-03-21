@@ -142,6 +142,11 @@ export interface CreativeResearch {
     toneGuidance?: string
   }
   competitorBrands?: string[]
+  mindstateMatch?: {
+    primary: string    // mindstate ID
+    secondary?: string // mindstate ID or null
+    reasoning?: string
+  }
 }
 
 export interface ProductImageLayer {
@@ -290,6 +295,7 @@ export interface ImagePromptRequest {
   messageZonePosition: string
   contrastMethod?: ContrastMethod
   visualDirection?: CreativeResearch["visualDirection"]
+  mindstateId?: string
   skipCache?: boolean
   feedback?: string
 }
@@ -314,6 +320,7 @@ export interface CopyRequest {
   brandVoice?: string
   copyDirection?: CreativeResearch["copyDirection"]
   productAnalysis?: ProductAnalysis
+  mindstateId?: string
   skipCache?: boolean
   feedback?: string
 }
