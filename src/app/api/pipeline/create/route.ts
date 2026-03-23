@@ -155,10 +155,24 @@ async function renderAdServerSide(
       const middleZoneTop = Math.round(height * 0.15)
       const middleZoneH = Math.round(height * 0.70)
       const py = middleZoneTop + Math.round((middleZoneH - targetH) / 2)
+
+      // Remove white/near-white background from product image
+      const prodCanvas = createCanvas(targetW, targetH)
+      const prodCtx = prodCanvas.getContext("2d")
+      prodCtx.drawImage(cutoutImg, 0, 0, targetW, targetH)
+      const imageData = prodCtx.getImageData(0, 0, targetW, targetH)
+      const data = imageData.data
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
+          data[i + 3] = 0
+        }
+      }
+      prodCtx.putImageData(imageData, 0, 0)
+
       ctx.save()
       ctx.globalCompositeOperation = "source-over"
       ctx.globalAlpha = 1
-      ctx.drawImage(cutoutImg, px, py, targetW, targetH)
+      ctx.drawImage(prodCanvas, px, py, targetW, targetH)
       ctx.restore()
     } catch (cutoutErr) {
       // Non-fatal: log and continue
@@ -224,15 +238,19 @@ async function renderAdServerSide(
   }
   if (line) lines.push(line)
 
-  // Draw dark gradient strip across top ~18% of image (natural, not a box)
-  const gradStripH = Math.round(height * 0.18)
+  // Calculate total text height to size the gradient strip correctly
+  const headlineBlockH = lines.length * headlineFontSize * 1.15
+  const subheadBlockH = subhead ? (8 + subheadFontSize * 1.15) : 0
+  const textBlockBottom = topY + headlineBlockH + subheadBlockH + Math.round(height * 0.02)
+  // Gradient covers from top to at least the bottom of all text, minimum 18%
+  const gradStripH = Math.max(Math.round(height * 0.18), textBlockBottom)
   const topGrad = ctx.createLinearGradient(0, 0, 0, gradStripH)
   topGrad.addColorStop(0, "rgba(0,0,0,0.7)")
   topGrad.addColorStop(1, "rgba(0,0,0,0)")
   ctx.fillStyle = topGrad
   ctx.fillRect(0, 0, width, gradStripH)
 
-  // Draw headline lines (centered)
+  // Draw headline lines (centered) — on top of gradient
   ctx.font = `${headlineWeight} ${headlineFontSize}px ${fontFamily}`
   ctx.fillStyle = headlineColor
   ctx.textAlign = "center"
@@ -251,12 +269,13 @@ async function renderAdServerSide(
   ctx.shadowBlur = 0
   ctx.shadowOffsetY = 0
 
-  // Draw subhead below headline at top
+  // Draw subhead BELOW headline (after all headline lines), also on the gradient
   if (subhead) {
     ty += 8
     ctx.font = `400 ${subheadFontSize}px ${fontFamily}`
     ctx.fillStyle = subheadColor
     ctx.textAlign = "center"
+    ctx.textBaseline = "top"
     ctx.fillText(subhead, headlineCenterX, ty)
     ty += subheadFontSize * 1.15
   }
@@ -266,8 +285,8 @@ async function renderAdServerSide(
     const fontSize = Math.round(width * 0.032)
     const padX = 20
     const padY = 14
-    const dotR = Math.max(Math.round(width * 0.008), 5)
-    const lineW = 2
+    const dotR = Math.max(6, Math.round(width * 0.008))
+    const lineW = Math.max(3, Math.round(width * 0.003))
     const borderR = 8
 
     ctx.font = `600 ${fontSize}px ${fontFamily}`
@@ -301,16 +320,16 @@ async function renderAdServerSide(
       edgeY = bcy + Math.sign(sin) * halfH
     }
 
-    // Leader line
-    ctx.strokeStyle = "rgba(255,255,255,0.9)"
-    ctx.lineWidth = lineW
+    // Leader line — gold color, visible thickness
+    ctx.strokeStyle = "#D4C96B"
+    ctx.lineWidth = Math.max(3, Math.round(width * 0.003))
     ctx.beginPath()
     ctx.moveTo(edgeX, edgeY)
     ctx.lineTo(ax, ay)
     ctx.stroke()
 
-    // Dot
-    ctx.fillStyle = "rgba(255,255,255,0.9)"
+    // Dot — gold to match leader line
+    ctx.fillStyle = "#D4C96B"
     ctx.beginPath()
     ctx.arc(ax, ay, dotR, 0, Math.PI * 2)
     ctx.fill()
