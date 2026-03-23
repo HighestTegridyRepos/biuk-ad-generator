@@ -92,7 +92,7 @@ async function renderAdServerSide(
   productCutoutBase64: string | null = null
 ): Promise<string> {
   // Dynamically import canvas (server-only)
-  const { createCanvas, loadImage, registerFont } = await import("canvas")
+  const { createCanvas, loadImage, GlobalFonts } = await import("@napi-rs/canvas")
 
   // Register bundled fonts (these ship with the app in public/fonts/)
   try {
@@ -103,10 +103,10 @@ async function renderAdServerSide(
     const regularFont = path.join(fontDir, "DejaVuSans.ttf")
     const boldFont = path.join(fontDir, "DejaVuSans-Bold.ttf")
     if (fs.existsSync(regularFont)) {
-      registerFont(regularFont, { family: "AdFont", weight: "normal" })
+      GlobalFonts.registerFromPath(regularFont, "AdFont")
     }
     if (fs.existsSync(boldFont)) {
-      registerFont(boldFont, { family: "AdFont", weight: "bold" })
+      GlobalFonts.registerFromPath(boldFont, "AdFontBold")
     }
   } catch {
     // Font registration failed — will use defaults
@@ -144,8 +144,9 @@ async function renderAdServerSide(
   if (productCutoutBase64) {
     try {
       // Use a generic image data URI — the canvas loadImage handles JPEG and PNG alike
-      const cutoutDataUri = `data:image/jpeg;base64,${productCutoutBase64}`
-      const cutoutImg = await loadImage(cutoutDataUri)
+      // @napi-rs/canvas loadImage accepts Buffer directly
+      const cutoutBuf = Buffer.from(productCutoutBase64, "base64")
+      const cutoutImg = await loadImage(cutoutBuf)
       const targetW = Math.round(width * 0.55)
       const scale = targetW / cutoutImg.width
       const targetH = Math.round(cutoutImg.height * scale)
@@ -252,10 +253,6 @@ async function renderAdServerSide(
 
   let ty = topY
   for (const l of lines) {
-    // Draw black outline first for crisp edges, then white fill
-    ctx.strokeStyle = "rgba(0,0,0,0.8)"
-    ctx.lineWidth = 3
-    ctx.strokeText(l, headlineCenterX, ty)
     ctx.fillText(l, headlineCenterX, ty)
     ty += headlineFontSize * 1.15
   }
@@ -359,7 +356,8 @@ async function renderAdServerSide(
     }
   }
 
-  return canvas.toDataURL("image/png")
+  const buffer = canvas.toBuffer("image/png")
+  return `data:image/png;base64,${buffer.toString("base64")}`
 }
 
 // ── Auto-position callouts on the image ──────────────────────────
@@ -449,6 +447,49 @@ async function scrapeProductHeroImage(productUrl: string): Promise<string | null
     logWarn(ROUTE_NAME, `Product scrape failed: ${(err as Error).message}`)
     return null
   }
+}
+
+async function removeBackground(imageBuffer: Buffer): Promise<Buffer | null> {
+  // Try remove.bg API first
+  const removeBgKey = process.env.REMOVE_BG_API_KEY
+  if (removeBgKey) {
+    try {
+      const formData = new FormData()
+      formData.append("image_file", new Blob([imageBuffer as unknown as ArrayBuffer]), "product.png")
+      formData.append("size", "auto")
+
+      const res = await fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": removeBgKey },
+        body: formData,
+      })
+
+      if (res.ok) {
+        return Buffer.from(await res.arrayBuffer())
+      } else {
+        console.warn("remove.bg returned status:", res.status)
+      }
+    } catch (err) {
+      console.warn("remove.bg failed:", err)
+    }
+  }
+
+  // Fallback: use rembg Python subprocess
+  try {
+    const { execSync } = await import("child_process")
+    const { writeFileSync, readFileSync, existsSync } = await import("fs")
+    const tmpIn = "/tmp/product_in.png"
+    const tmpOut = "/tmp/product_out.png"
+    writeFileSync(tmpIn, imageBuffer)
+    execSync(`python3 -m rembg i "${tmpIn}" "${tmpOut}"`, { timeout: 30000 })
+    if (existsSync(tmpOut)) {
+      return readFileSync(tmpOut)
+    }
+  } catch (err) {
+    console.warn("rembg fallback failed:", err)
+  }
+
+  return null // both methods failed, caller uses original image
 }
 
 async function removeBackgroundFromUrl(imageUrl: string): Promise<string | null> {
@@ -641,26 +682,29 @@ export async function POST(request: NextRequest) {
     }
     logInfo(ROUTE_NAME, "Step 5 done")
 
-    // ── STEP 5.5: Scrape product image (optional) ────
-    // NOTE: We skip AI background removal (it bakes in a checkerboard pattern instead of real
-    // transparency). Shopify product images almost always have a clean white background already,
-    // which looks fine composited over the ad background.
+    // ── STEP 5.5: Scrape product image + background removal ────
     let productCutoutBase64: string | null = null
     if (productUrl) {
-      logInfo(ROUTE_NAME, "Step 5.5: Scraping product image (no bg removal)")
+      logInfo(ROUTE_NAME, "Step 5.5: Scraping product image")
       try {
         const heroImageUrl = await scrapeProductHeroImage(productUrl)
         if (heroImageUrl) {
           logInfo(ROUTE_NAME, `Step 5.5: Found hero image ${heroImageUrl}`)
-          // Fetch the image directly and convert to base64
           const imgRes = await fetch(heroImageUrl, {
             headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
             signal: AbortSignal.timeout(15000),
           })
           if (imgRes.ok) {
             const imgBuf = await imgRes.arrayBuffer()
-            productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
-            logInfo(ROUTE_NAME, "Step 5.5: Product image fetched successfully")
+            logInfo(ROUTE_NAME, "Step 5.5: Attempting background removal")
+            const cleanCutout = await removeBackground(Buffer.from(imgBuf))
+            if (cleanCutout) {
+              productCutoutBase64 = cleanCutout.toString("base64")
+              logInfo(ROUTE_NAME, "Step 5.5: Background removed successfully")
+            } else {
+              productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
+              logInfo(ROUTE_NAME, "Step 5.5: Background removal unavailable — using original image")
+            }
           } else {
             logWarn(ROUTE_NAME, `Step 5.5: Failed to fetch hero image (${imgRes.status}) — skipping product image`)
           }
