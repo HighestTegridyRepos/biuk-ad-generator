@@ -147,7 +147,7 @@ async function renderAdServerSide(
       // @napi-rs/canvas loadImage accepts Buffer directly
       const cutoutBuf = Buffer.from(productCutoutBase64, "base64")
       const cutoutImg = await loadImage(cutoutBuf)
-      const targetW = Math.round(width * 0.55)
+      const targetW = Math.round(width * 0.75)
       const scale = targetW / cutoutImg.width
       const targetH = Math.round(cutoutImg.height * scale)
       const px = Math.round((width - targetW) / 2)
@@ -172,13 +172,13 @@ async function renderAdServerSide(
   }
 
   // Draw bottom banner
-  const bannerHeight = Math.round(height * 0.13)
+  const bannerHeight = Math.round(height * 0.09)
   const bannerY = height - bannerHeight
   ctx.fillStyle = bannerColor
   ctx.fillRect(0, bannerY, width, bannerHeight)
 
   // Banner text (stars + text centered)
-  const bannerFontSize = Math.round(width * 0.05)
+  const bannerFontSize = Math.round(width * 0.04)
   const stars = "★★★★★"
   ctx.font = `bold ${bannerFontSize}px AdFont`
   ctx.fillStyle = "#1a1a1a"
@@ -369,14 +369,14 @@ function autoPositionCallouts(
 ): Array<{ text: string; position: { x: number; y: number }; anchorPoint: { x: number; y: number } }> {
   // Corner positions for callout bubbles (X-pattern radiating from product center)
   const positions = [
-    // top-left: bubble pushed down to 38% from top, far left edge
-    { bx: width * 0.02, by: height * 0.38, ax: width * 0.38, ay: height * 0.42 },
-    // top-right: bubble pushed down to 38% from top, far right edge
-    { bx: width * 0.62, by: height * 0.38, ax: width * 0.62, ay: height * 0.42 },
-    // bottom-left: bubble pushed UP to 55% from top, far left edge
-    { bx: width * 0.02, by: height * 0.55, ax: width * 0.38, ay: height * 0.55 },
-    // bottom-right: bubble pushed UP to 55% from top, far right edge
-    { bx: width * 0.62, by: height * 0.55, ax: width * 0.62, ay: height * 0.55 },
+    // top-left: pushed out left, vertically at 32%
+    { bx: width * 0.01, by: height * 0.32, ax: width * 0.35, ay: height * 0.40 },
+    // top-right: pushed out right, vertically at 32%
+    { bx: width * 0.68, by: height * 0.32, ax: width * 0.65, ay: height * 0.40 },
+    // bottom-left: pushed out left, vertically at 58%
+    { bx: width * 0.01, by: height * 0.58, ax: width * 0.35, ay: height * 0.58 },
+    // bottom-right: pushed out right, vertically at 58%
+    { bx: width * 0.68, by: height * 0.58, ax: width * 0.65, ay: height * 0.58 },
   ]
 
   return calloutInputs.map((callout, i) => {
