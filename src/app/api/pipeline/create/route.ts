@@ -252,6 +252,10 @@ async function renderAdServerSide(
 
   let ty = topY
   for (const l of lines) {
+    // Draw black outline first for crisp edges, then white fill
+    ctx.strokeStyle = "rgba(0,0,0,0.8)"
+    ctx.lineWidth = 3
+    ctx.strokeText(l, headlineCenterX, ty)
     ctx.fillText(l, headlineCenterX, ty)
     ty += headlineFontSize * 1.15
   }
