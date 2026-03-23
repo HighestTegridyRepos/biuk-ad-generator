@@ -27,6 +27,7 @@ interface SceneResult {
   scenePrompt: string
   sceneDNA: string
   imageDataUrl: string
+  cleanImageDataUrl: string | null
 }
 
 // ── Image generation helper ───────────────────────────────────────
@@ -58,11 +59,40 @@ async function generateSceneImage(sceneDNA: string, scenePrompt: string): Promis
     throw new Error("Image model did not return an image")
   }
 
+  // Generate clean version of the scene
+  let cleanImageDataUrl: string | null = null
+  try {
+    const cleanResponse = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: imageMimeType, data: imageBase64 } },
+          { text: "Show this exact same scene but perfectly clean. All stains, mould, mildew, dirt, grime, and damage have been completely removed. Surfaces are pristine, fresh, and restored to like-new condition. Same angle, same lighting, same composition — just spotlessly clean." },
+        ],
+      }],
+      config: { responseModalities: ["IMAGE", "TEXT"] as any },
+    })
+
+    const cleanParts = cleanResponse.candidates?.[0]?.content?.parts
+    if (cleanParts) {
+      for (const part of cleanParts) {
+        if (part.inlineData) {
+          cleanImageDataUrl = `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`
+          break
+        }
+      }
+    }
+  } catch (err) {
+    logWarn(ROUTE_NAME, `Clean image generation failed: ${(err as Error).message}`)
+  }
+
   return {
     sceneId: uuid(),
     scenePrompt,
     sceneDNA,
     imageDataUrl: `data:${imageMimeType};base64,${imageBase64}`,
+    cleanImageDataUrl,
   }
 }
 

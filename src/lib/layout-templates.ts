@@ -58,6 +58,16 @@ export const layoutTemplates: LayoutTemplate[] = [
     }),
   },
   {
+    id: "before-after-quad",
+    name: "Before/After Quad",
+    description: "Header text, 2x2 before/after image grid with centered product overlay, social proof banner",
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    getZones: (w, h, _sz) => ({
+      anchorZone: { x: 0, y: Math.round(h * 0.22), width: w, height: Math.round(h * 0.65) },
+      messageZone: { x: Math.round(w * 0.05), y: Math.round(h * 0.02), width: Math.round(w * 0.90), height: Math.round(h * 0.18) },
+    }),
+  },
+  {
     id: "corner-badge",
     name: "Corner Badge",
     description: "Anchor full bleed, Message bottom-left corner",

@@ -49,6 +49,9 @@ interface PipelineRequest {
   imagePromptOverride?: string
   sceneId?: string
   backgroundImageDataUrl?: string
+  beforeAfterScenes?: Array<{ dirtyImageDataUrl: string; cleanImageDataUrl: string }>
+  bannerStyle?: "trustpilot" | "gold"
+  socialProofText?: string
 }
 
 interface HeadlineVariation {
@@ -78,6 +81,176 @@ interface PipelineResponse {
 }
 
 // ── Server-side canvas rendering ──────────────────────────────────
+
+async function renderBeforeAfterQuad(
+  width: number,
+  height: number,
+  headline: string,
+  beforeAfterScenes: Array<{ dirtyImageDataUrl: string; cleanImageDataUrl: string }>,
+  productCutoutBase64: string | null,
+  socialProofText: string = "100,000+ Happy Customers",
+  bannerStyle: "trustpilot" | "gold" = "trustpilot"
+): Promise<string> {
+  const { createCanvas, loadImage, GlobalFonts } = await import("@napi-rs/canvas")
+  const path = await import("path")
+  const fs = await import("fs")
+
+  try {
+    const fontDir = path.join(process.cwd(), "public", "fonts")
+    const regularFont = path.join(fontDir, "DejaVuSans.ttf")
+    const boldFont = path.join(fontDir, "DejaVuSans-Bold.ttf")
+    if (fs.existsSync(regularFont)) GlobalFonts.registerFromPath(regularFont, "AdFont")
+    if (fs.existsSync(boldFont)) GlobalFonts.registerFromPath(boldFont, "AdFontBold")
+  } catch { /* Font registration failed */ }
+
+  const canvas = createCanvas(width, height)
+  const ctx = canvas.getContext("2d")
+
+  const headerH = Math.round(height * 0.22)
+  const bannerH = Math.round(height * 0.13)
+  const gridH = height - headerH - bannerH
+  const gridY = headerH
+  const bannerY = height - bannerH
+  const gridGap = Math.round(width * 0.004)
+  const cellW = Math.round((width - gridGap) / 2)
+  const cellH = Math.round((gridH - gridGap) / 2)
+
+  ctx.fillStyle = "#FFF8F0"
+  ctx.fillRect(0, 0, width, headerH)
+
+  headline = headline.toUpperCase()
+  const headlineFontSize = Math.round(width * 0.088)
+  ctx.font = `900 ${headlineFontSize}px AdFontBold, AdFont, sans-serif`
+  ctx.fillStyle = "#0A0A0A"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "top"
+
+  const maxTextWidth = Math.round(width * 0.92)
+  const words = headline.split(" ")
+  let line = ""
+  const lines: string[] = []
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxTextWidth && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+
+  const lineHeight = headlineFontSize * 1.05
+  const totalTextH = lines.length * lineHeight
+  const textStartY = Math.round((headerH - totalTextH) / 2)
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], width / 2, textStartY + i * lineHeight)
+  }
+
+  ctx.strokeStyle = "#D0D0D0"
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(0, headerH - 1)
+  ctx.lineTo(width, headerH - 1)
+  ctx.stroke()
+
+  ctx.fillStyle = "#FFFFFF"
+  ctx.fillRect(0, gridY, width, gridH)
+
+  async function drawCoverImage(dataUrl: string, dx: number, dy: number, dw: number, dh: number) {
+    const match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
+    if (!match) return
+    const buf = Buffer.from(match[1], "base64")
+    const img = await loadImage(buf)
+    const imgAspect = img.width / img.height
+    const cellAspect = dw / dh
+    let sx = 0, sy = 0, sw = img.width, sh = img.height
+    if (imgAspect > cellAspect) {
+      sw = img.height * cellAspect
+      sx = (img.width - sw) / 2
+    } else {
+      sh = img.width / cellAspect
+      sy = (img.height - sh) / 2
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)
+  }
+
+  const scene1 = beforeAfterScenes[0]
+  const scene2 = beforeAfterScenes.length > 1 ? beforeAfterScenes[1] : beforeAfterScenes[0]
+
+  await drawCoverImage(scene1.dirtyImageDataUrl, 0, gridY, cellW, cellH)
+  await drawCoverImage(scene1.cleanImageDataUrl, cellW + gridGap, gridY, cellW, cellH)
+  await drawCoverImage(scene2.dirtyImageDataUrl, 0, gridY + cellH + gridGap, cellW, cellH)
+  await drawCoverImage(scene2.cleanImageDataUrl, cellW + gridGap, gridY + cellH + gridGap, cellW, cellH)
+
+  if (productCutoutBase64) {
+    try {
+      const cutoutBuf = Buffer.from(productCutoutBase64, "base64")
+      const cutoutImg = await loadImage(cutoutBuf)
+      const targetH = Math.round(height * 0.45)
+      const scale = targetH / cutoutImg.height
+      const targetW = Math.round(cutoutImg.width * scale)
+      const px = Math.round((width - targetW) / 2)
+      const py = Math.round(gridY + (gridH - targetH) / 2)
+      ctx.save()
+      ctx.shadowColor = "rgba(0,0,0,0.3)"
+      ctx.shadowBlur = 20
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 5
+      ctx.drawImage(cutoutImg, px, py, targetW, targetH)
+      ctx.restore()
+    } catch (err) {
+      console.warn("Product overlay failed:", err)
+    }
+  }
+
+  if (bannerStyle === "trustpilot") {
+    ctx.fillStyle = "#1A1A1A"
+    ctx.fillRect(0, bannerY, width, bannerH)
+
+    const starBoxSize = Math.round(bannerH * 0.35)
+    const starGap = Math.round(starBoxSize * 0.08)
+    const starCount = 5
+    const starsWidth = starCount * starBoxSize + (starCount - 1) * starGap
+    const socialFontSize = Math.round(width * 0.038)
+    ctx.font = `italic 500 ${socialFontSize}px AdFont, sans-serif`
+    const socialTextWidth = ctx.measureText(socialProofText).width
+    const totalBannerContent = starsWidth + Math.round(width * 0.03) + socialTextWidth
+    const bannerStartX = Math.round((width - totalBannerContent) / 2)
+    const bannerCenterY = bannerY + Math.round(bannerH / 2)
+
+    for (let i = 0; i < starCount; i++) {
+      const bx = bannerStartX + i * (starBoxSize + starGap)
+      const by = bannerCenterY - Math.round(starBoxSize / 2)
+      ctx.fillStyle = "#00B67A"
+      ctx.fillRect(bx, by, starBoxSize, starBoxSize)
+      ctx.fillStyle = "#FFFFFF"
+      ctx.font = `bold ${Math.round(starBoxSize * 0.6)}px AdFont`
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
+      ctx.fillText("\u2605", bx + starBoxSize / 2, by + starBoxSize / 2)
+    }
+
+    ctx.fillStyle = "#FFFFFF"
+    ctx.font = `italic 500 ${socialFontSize}px AdFont, sans-serif`
+    ctx.textAlign = "left"
+    ctx.textBaseline = "middle"
+    const textX = bannerStartX + starsWidth + Math.round(width * 0.03)
+    ctx.fillText(socialProofText, textX, bannerCenterY)
+  } else {
+    ctx.fillStyle = "#D4C96B"
+    ctx.fillRect(0, bannerY, width, bannerH)
+    const bannerFontSize = Math.round(width * 0.04)
+    ctx.font = `bold ${bannerFontSize}px AdFont`
+    ctx.fillStyle = "#1a1a1a"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(socialProofText, width / 2, bannerY + bannerH / 2)
+  }
+
+  const pngBuffer = canvas.toBuffer("image/png")
+  return `data:image/png;base64,${pngBuffer.toString("base64")}`
+}
 
 async function renderAdServerSide(
   imageBase64: string,
@@ -598,8 +771,11 @@ export async function POST(request: NextRequest) {
   const imagePromptOverride = body.imagePromptOverride || null
   const backgroundImageDataUrl = body.backgroundImageDataUrl || null
   const sceneId = body.sceneId || null
+  const beforeAfterScenes = body.beforeAfterScenes || null
+  const bannerStyle = body.bannerStyle || (layout === "before-after-quad" ? "trustpilot" : "gold")
+  const socialProofText = body.socialProofText || "100,000+ Happy Customers"
 
-  if (!brief || typeof brief !== "string" || brief.trim().length < 10) {
+  if (layout !== "before-after-quad" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
     return NextResponse.json({ error: "A brief (string, min 10 chars) is required" }, { status: 400 })
   }
 
@@ -616,6 +792,84 @@ export async function POST(request: NextRequest) {
   const messageZonePosition = getMessageZonePosition(messageZone, width, height)
 
   try {
+    // Before-After-Quad early return path
+    if (layout === "before-after-quad") {
+      logInfo(ROUTE_NAME, "Before-After-Quad layout detected")
+
+      if (!beforeAfterScenes || beforeAfterScenes.length < 2) {
+        return NextResponse.json({ error: "before-after-quad layout requires beforeAfterScenes array with at least 2 scene pairs" }, { status: 400 })
+      }
+
+      let quadHeadline: string
+      if (headlineOverride) {
+        quadHeadline = headlineOverride
+      } else if (brief) {
+        const headlinePrompt = `Write a single short, punchy, attention-grabbing headline for a cleaning product ad. The headline should be a question or bold statement that creates urgency. Max 6 words. Brief: ${brief}`
+        const headlineRaw = await generateText(GEMINI_FLASH, "You write ad headlines. Return ONLY the headline text, nothing else.", headlinePrompt, 15_000)
+        quadHeadline = headlineRaw.trim().replace(/^["'']|["'']$/g, "")
+      } else {
+        quadHeadline = "SEE THE DIFFERENCE"
+      }
+
+      let productCutoutBase64: string | null = null
+      if (productUrl) {
+        logInfo(ROUTE_NAME, "Before-After-Quad: Scraping product image")
+        try {
+          const heroImageUrl = await scrapeProductHeroImage(productUrl)
+          if (heroImageUrl) {
+            const imgRes = await fetch(heroImageUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+              signal: AbortSignal.timeout(15000),
+            })
+            if (imgRes.ok) {
+              const imgBuf = await imgRes.arrayBuffer()
+              const cleanCutout = await removeBackground(Buffer.from(imgBuf))
+              if (cleanCutout) {
+                productCutoutBase64 = cleanCutout.toString("base64")
+                logInfo(ROUTE_NAME, "Before-After-Quad: Background removed")
+              } else {
+                productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
+              }
+            }
+          }
+        } catch (err) {
+          logWarn(ROUTE_NAME, `Before-After-Quad: Product image failed (${(err as Error).message})`)
+        }
+      }
+
+      logInfo(ROUTE_NAME, "Before-After-Quad: Rendering")
+      const finalImageDataUrl = await renderBeforeAfterQuad(
+        width,
+        height,
+        quadHeadline,
+        beforeAfterScenes,
+        productCutoutBase64,
+        socialProofText,
+        bannerStyle === "trustpilot" ? "trustpilot" : "gold"
+      )
+
+      logInfo(ROUTE_NAME, "Before-After-Quad: Done")
+
+      return NextResponse.json({
+        concepts: [],
+        selectedConcept: null,
+        imagePrompt: "before-after-quad layout",
+        generatedImageUrl: finalImageDataUrl,
+        imageDescription: "Before/after quad layout with product overlay",
+        headlines: [{ id: uuid(), headline: quadHeadline, subhead: null, cta: "SHOP NOW" }],
+        selectedHeadline: { id: uuid(), headline: quadHeadline, subhead: null, cta: "SHOP NOW" },
+        finalAds: [{
+          imageDataUrl: finalImageDataUrl,
+          label: "Before/After Quad Ad",
+          headline: quadHeadline,
+          subhead: null,
+          cta: "SHOP NOW",
+          callouts: [],
+        }],
+        productIntelligence: null,
+      })
+    }
+
     // ── STEP 1: Generate concepts ─────────────────────────────────
     logInfo(ROUTE_NAME, "Step 1: Generating concepts")
     const conceptUserPrompt = buildConceptUserPrompt(brief)
