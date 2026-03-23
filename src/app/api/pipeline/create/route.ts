@@ -86,7 +86,8 @@ async function renderAdServerSide(
   textY: number,
   maxTextWidth: number,
   bannerColor: string = "#D4C96B",
-  bannerText: string = "SUBSCRIBE & SAVE 20%"
+  bannerText: string = "SUBSCRIBE & SAVE 20%",
+  productCutoutBase64: string | null = null
 ): Promise<string> {
   // Dynamically import canvas (server-only)
   const { createCanvas, loadImage, registerFont } = await import("canvas")
@@ -135,6 +136,24 @@ async function renderAdServerSide(
     grad.addColorStop(1, "rgba(0,0,0,0)")
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, width, height)
+  }
+
+  // Draw product cutout (if provided) — centered, ~40% canvas width
+  if (productCutoutBase64) {
+    try {
+      const cutoutBuffer = Buffer.from(productCutoutBase64, "base64")
+      const cutoutImg = await loadImage(cutoutBuffer)
+      const targetW = width * 0.4
+      const scale = targetW / cutoutImg.width
+      const targetH = cutoutImg.height * scale
+      const px = (width - targetW) / 2
+      const py = (height - targetH) / 2
+      ctx.globalAlpha = 1
+      ctx.drawImage(cutoutImg, px, py, targetW, targetH)
+    } catch (cutoutErr) {
+      // Non-fatal: log and continue
+      console.warn("Product cutout compositing failed:", cutoutErr)
+    }
   }
 
   // Draw bottom banner
@@ -575,6 +594,28 @@ export async function POST(request: NextRequest) {
     const selectedHeadline = headlines[0]
     logInfo(ROUTE_NAME, "Step 5 done")
 
+    // ── STEP 5.5: Scrape product image + remove background (optional) ────
+    let productCutoutBase64: string | null = null
+    if (productUrl) {
+      logInfo(ROUTE_NAME, "Step 5.5: Scraping product image and removing background")
+      try {
+        const heroImageUrl = await scrapeProductHeroImage(productUrl)
+        if (heroImageUrl) {
+          logInfo(ROUTE_NAME, `Step 5.5: Found hero image ${heroImageUrl}`)
+          productCutoutBase64 = await removeBackgroundFromUrl(heroImageUrl)
+          if (productCutoutBase64) {
+            logInfo(ROUTE_NAME, "Step 5.5: Background removal succeeded")
+          } else {
+            logWarn(ROUTE_NAME, "Step 5.5: Background removal returned nothing — skipping product image")
+          }
+        } else {
+          logWarn(ROUTE_NAME, "Step 5.5: Could not find hero image — skipping product image")
+        }
+      } catch (productErr) {
+        logWarn(ROUTE_NAME, `Step 5.5: Product image failed (${(productErr as Error).message}) — continuing without it`)
+      }
+    }
+
     // ── STEP 6: Compose final ad ──────────────────────────────────
     logInfo(ROUTE_NAME, "Step 6: Composing ad")
 
@@ -603,7 +644,8 @@ export async function POST(request: NextRequest) {
         textY,
         maxTextW,
         bannerColor,
-        bannerText
+        bannerText,
+        productCutoutBase64
       )
     } catch (canvasErr) {
       logWarn(ROUTE_NAME, `Canvas rendering failed (${(canvasErr as Error).message}), using fallback`)

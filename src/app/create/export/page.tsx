@@ -422,6 +422,23 @@ export default function ExportPage() {
       }
     }
 
+    // Draw bottom banner
+    const banner = project.composition.banner
+    if (banner?.visible) {
+      const bh = h * 0.1
+      const bby = h - bh
+      ctx.fillStyle = banner.color
+      ctx.fillRect(0, bby, w, bh)
+      const fontSize = Math.round(w * 0.035)
+      ctx.font = `bold ${fontSize}px Inter, sans-serif`
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
+      ctx.fillStyle = banner.textColor ?? "#1a1a1a"
+      const bcy = bby + bh / 2
+      const stars = banner.showStars !== false ? "★★★★★ " : ""
+      ctx.fillText(stars + banner.text, w / 2, bcy)
+    }
+
     return canvas.toDataURL("image/png", 1.0)
   }, [project, width, height])
 

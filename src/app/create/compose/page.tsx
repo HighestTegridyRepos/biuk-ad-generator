@@ -561,6 +561,29 @@ export default function ComposePage() {
               )
             })}
 
+            {/* Bottom Banner Overlay */}
+            {project.composition.banner?.visible && (
+              <div
+                className="pointer-events-none absolute left-0 right-0"
+                style={{
+                  bottom: 0,
+                  height: "10%",
+                  backgroundColor: project.composition.banner.color,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.4em",
+                }}
+              >
+                {project.composition.banner.showStars && (
+                  <span style={{ color: project.composition.banner.textColor, fontSize: "clamp(10px, 2vw, 18px)" }}>★★★★★</span>
+                )}
+                <span style={{ color: project.composition.banner.textColor, fontWeight: 700, fontSize: "clamp(9px, 1.8vw, 16px)", letterSpacing: "0.05em" }}>
+                  {project.composition.banner.text}
+                </span>
+              </div>
+            )}
+
             {/* Empty state */}
             {!project.copy.selected && (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -917,6 +940,53 @@ export default function ComposePage() {
                 <div className="text-xs text-zinc-600">Drag bubble or dot on canvas to reposition</div>
               </div>
             ))}
+          </div>
+
+          {/* Bottom Banner Section */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Bottom Banner</h3>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-zinc-400">Show</span>
+                <input
+                  type="checkbox"
+                  checked={project.composition.banner?.visible ?? false}
+                  onChange={() => dispatch({ type: "TOGGLE_BANNER" })}
+                  className="h-3.5 w-3.5 accent-[var(--accent)]"
+                />
+              </label>
+            </div>
+            {(project.composition.banner?.visible) && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-zinc-500 w-16">Color</label>
+                  <input
+                    type="color"
+                    value={project.composition.banner?.color ?? "#D4C96B"}
+                    onChange={(e) => dispatch({ type: "UPDATE_BANNER", payload: { color: e.target.value } })}
+                    className="h-5 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-zinc-500 w-16">Text</label>
+                  <input
+                    type="text"
+                    value={project.composition.banner?.text ?? "SUBSCRIBE & SAVE 20%"}
+                    onChange={(e) => dispatch({ type: "UPDATE_BANNER", payload: { text: e.target.value } })}
+                    className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-white"
+                  />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={project.composition.banner?.showStars ?? true}
+                    onChange={(e) => dispatch({ type: "UPDATE_BANNER", payload: { showStars: e.target.checked } })}
+                    className="h-3.5 w-3.5 accent-[var(--accent)]"
+                  />
+                  <span className="text-xs text-zinc-400">Show 5 Stars</span>
+                </label>
+              </div>
+            )}
           </div>
 
           <TextStylePanel />

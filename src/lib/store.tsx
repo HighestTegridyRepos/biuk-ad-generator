@@ -170,6 +170,17 @@ function loadFromLocalStorage(): AdProject | null {
         parsed.composition.callouts = []
       }
     }
+    if (!parsed.composition?.banner) {
+      if (parsed.composition) {
+        parsed.composition.banner = {
+          visible: false,
+          color: "#D4C96B",
+          text: "SUBSCRIBE & SAVE 20%",
+          textColor: "#1a1a1a",
+          showStars: true,
+        }
+      }
+    }
     return parsed as AdProject
   } catch {
     return null
@@ -453,6 +464,24 @@ function reducer(state: AdProject, action: Action): AdProject {
       )
       return { ...updated, composition: { ...updated.composition, callouts } }
     }
+
+    case "UPDATE_BANNER":
+      return {
+        ...updated,
+        composition: {
+          ...updated.composition,
+          banner: { ...(updated.composition.banner ?? { visible: false, color: "#D4C96B", text: "SUBSCRIBE & SAVE 20%", textColor: "#1a1a1a", showStars: true }), ...action.payload },
+        },
+      }
+
+    case "TOGGLE_BANNER":
+      return {
+        ...updated,
+        composition: {
+          ...updated.composition,
+          banner: { ...(updated.composition.banner ?? { visible: false, color: "#D4C96B", text: "SUBSCRIBE & SAVE 20%", textColor: "#1a1a1a", showStars: true }), visible: !(updated.composition.banner?.visible ?? false) },
+        },
+      }
 
     case "TOGGLE_BATCH_IMAGE": {
       const existing = updated.batch.images
