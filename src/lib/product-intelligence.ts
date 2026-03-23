@@ -8,14 +8,14 @@ import { GEMINI_FLASH } from "@/lib/gemini"
 
 export const SCENE_DNA: Record<string, string[]> = {
   "carpet-fabric-cleaner": [
-    "A large red wine spill spreading across a cream-colored wool carpet in a modern living room, with a tipped wine glass nearby",
-    "Muddy dog paw prints tracked across a pristine white shag rug, leading from a front door into a living room",
-    "A dark coffee stain soaking into a light grey fabric sofa cushion, with a toppled ceramic mug beside it",
-    "Ground-in chocolate smudges on a beige upholstered dining chair seat, crumbs scattered nearby",
-    "A toddler's juice spill — bright purple grape juice pooling on a cream carpet near scattered toys",
-    "Multiple overlapping boot prints of dried mud on a light oatmeal Berber carpet near an entryway",
-    "A pasta sauce splatter across a white linen tablecloth draped over a farmhouse dining table",
-    "Pet vomit stain on a light-colored carpet runner in a hallway, harsh overhead light emphasizing the discoloration",
+    "A glass of red wine tipping over onto a beautiful cream-colored velvet sofa in a stylish modern living room, the wine just starting to spill — that heart-stopping moment",
+    "A fresh coffee spill on the passenger seat of a luxury car interior, dark leather dashboard and steering wheel visible, coffee cup lid popped off",
+    "A toddler's sticky handprints and a knocked-over juice cup on a pristine white fabric armchair in a bright, airy nursery",
+    "Muddy paw prints from a golden retriever tracked across an expensive-looking cream wool rug in a beautifully decorated living room with mid-century furniture",
+    "A large dark stain spreading into the fabric of an elegant tufted dining chair at a dinner party setting with candles and wine glasses on the table",
+    "Spilled hot chocolate soaking into the backseat upholstery of a family SUV, children's car seats visible nearby",
+    "A brand new light grey L-shaped sofa in a showroom-quality living room with a fresh red sauce stain on one cushion — the contrast between the perfect room and the stain",
+    "A beautiful cream carpet in a bright sunlit hallway with a trail of muddy boot prints leading from the front door, coat rack and shoes visible",
   ],
   "kitchen-degreaser": [
     "Thick grease buildup and burnt oil residue on stainless steel stovetop burner grates, shot macro",
