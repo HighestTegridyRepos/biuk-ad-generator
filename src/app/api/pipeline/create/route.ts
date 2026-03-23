@@ -84,25 +84,19 @@ async function renderAdServerSide(
   // Dynamically import canvas (server-only)
   const { createCanvas, loadImage, registerFont } = await import("canvas")
 
-  // Register a font if available, otherwise fall back
+  // Register bundled fonts (these ship with the app in public/fonts/)
   try {
     const path = await import("path")
     const fs = await import("fs")
-    // Try common font paths
-    const fontPaths = [
-      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-      "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    ]
-    for (const fp of fontPaths) {
-      if (fs.existsSync(fp)) {
-        if (fp.includes("Bold")) {
-          registerFont(fp, { family: "Pipeline", weight: "bold" })
-        } else {
-          registerFont(fp, { family: "Pipeline", weight: "normal" })
-        }
-      }
+    // Fonts bundled in public/fonts/ — deployed with the app
+    const fontDir = path.join(process.cwd(), "public", "fonts")
+    const regularFont = path.join(fontDir, "DejaVuSans.ttf")
+    const boldFont = path.join(fontDir, "DejaVuSans-Bold.ttf")
+    if (fs.existsSync(regularFont)) {
+      registerFont(regularFont, { family: "AdFont", weight: "normal" })
+    }
+    if (fs.existsSync(boldFont)) {
+      registerFont(boldFont, { family: "AdFont", weight: "bold" })
     }
   } catch {
     // Font registration failed — will use defaults
@@ -136,8 +130,8 @@ async function renderAdServerSide(
     ctx.fillRect(0, 0, width, height)
   }
 
-  // Font settings — use registered Pipeline font or DejaVu Sans as fallback
-  const fontFamily = "Pipeline, DejaVu Sans, Liberation Sans, Arial, sans-serif"
+  // Font settings — use bundled AdFont (DejaVu Sans)
+  const fontFamily = "AdFont"
   const headlineFontSize = Math.round(width * 0.06)
   const subheadFontSize = Math.round(width * 0.035)
   const ctaFontSize = Math.round(width * 0.035)
