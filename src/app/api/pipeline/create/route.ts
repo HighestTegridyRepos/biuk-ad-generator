@@ -132,14 +132,13 @@ async function renderAdServerSide(
   }
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height)
 
-  // Draw gradient overlay
+  // Draw subtle bottom gradient (just enough for banner readability)
   if (contrastMethod === "gradient" || contrastMethod === "gradient-overlay") {
-    const grad = ctx.createLinearGradient(0, height, 0, 0)
-    grad.addColorStop(0, "rgba(0,0,0,0.85)")
-    grad.addColorStop(0.6, "rgba(0,0,0,0.3)")
+    const grad = ctx.createLinearGradient(0, height, 0, height * 0.75)
+    grad.addColorStop(0, "rgba(0,0,0,0.4)")
     grad.addColorStop(1, "rgba(0,0,0,0)")
     ctx.fillStyle = grad
-    ctx.fillRect(0, 0, width, height)
+    ctx.fillRect(0, Math.round(height * 0.75), width, Math.round(height * 0.25))
   }
 
   // Draw product cutout (if provided) — centered, ~55% canvas width
@@ -244,8 +243,8 @@ async function renderAdServerSide(
   // Gradient covers from top to at least the bottom of all text, minimum 18%
   const gradStripH = Math.max(Math.round(height * 0.28), textBlockBottom + 20)
   const topGrad = ctx.createLinearGradient(0, 0, 0, gradStripH)
-  topGrad.addColorStop(0, "rgba(0,0,0,0.85)")
-  topGrad.addColorStop(0.6, "rgba(0,0,0,0.5)")
+  topGrad.addColorStop(0, "rgba(0,0,0,0.55)")
+  topGrad.addColorStop(0.6, "rgba(0,0,0,0.2)")
   topGrad.addColorStop(1, "rgba(0,0,0,0)")
   ctx.fillStyle = topGrad
   ctx.fillRect(0, 0, width, gradStripH)
