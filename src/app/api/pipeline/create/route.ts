@@ -143,8 +143,8 @@ async function renderAdServerSide(
   // Draw product cutout (if provided) — centered, ~55% canvas width
   if (productCutoutBase64) {
     try {
-      // Prefix with PNG data URI so loadImage always gets a valid PNG
-      const cutoutDataUri = `data:image/png;base64,${productCutoutBase64}`
+      // Use a generic image data URI — the canvas loadImage handles JPEG and PNG alike
+      const cutoutDataUri = `data:image/jpeg;base64,${productCutoutBase64}`
       const cutoutImg = await loadImage(cutoutDataUri)
       const targetW = Math.round(width * 0.55)
       const scale = targetW / cutoutImg.width
@@ -626,19 +626,28 @@ export async function POST(request: NextRequest) {
     }
     logInfo(ROUTE_NAME, "Step 5 done")
 
-    // ── STEP 5.5: Scrape product image + remove background (optional) ────
+    // ── STEP 5.5: Scrape product image (optional) ────
+    // NOTE: We skip AI background removal (it bakes in a checkerboard pattern instead of real
+    // transparency). Shopify product images almost always have a clean white background already,
+    // which looks fine composited over the ad background.
     let productCutoutBase64: string | null = null
     if (productUrl) {
-      logInfo(ROUTE_NAME, "Step 5.5: Scraping product image and removing background")
+      logInfo(ROUTE_NAME, "Step 5.5: Scraping product image (no bg removal)")
       try {
         const heroImageUrl = await scrapeProductHeroImage(productUrl)
         if (heroImageUrl) {
           logInfo(ROUTE_NAME, `Step 5.5: Found hero image ${heroImageUrl}`)
-          productCutoutBase64 = await removeBackgroundFromUrl(heroImageUrl)
-          if (productCutoutBase64) {
-            logInfo(ROUTE_NAME, "Step 5.5: Background removal succeeded")
+          // Fetch the image directly and convert to base64
+          const imgRes = await fetch(heroImageUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+            signal: AbortSignal.timeout(15000),
+          })
+          if (imgRes.ok) {
+            const imgBuf = await imgRes.arrayBuffer()
+            productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
+            logInfo(ROUTE_NAME, "Step 5.5: Product image fetched successfully")
           } else {
-            logWarn(ROUTE_NAME, "Step 5.5: Background removal returned nothing — skipping product image")
+            logWarn(ROUTE_NAME, `Step 5.5: Failed to fetch hero image (${imgRes.status}) — skipping product image`)
           }
         } else {
           logWarn(ROUTE_NAME, "Step 5.5: Could not find hero image — skipping product image")
