@@ -153,7 +153,7 @@ async function renderAdServerSide(
       const px = Math.round((width - targetW) / 2)
       // Center vertically in the middle 70% of the canvas
       // (skip top 15% headline zone and bottom 15% banner zone)
-      const middleZoneTop = Math.round(height * 0.22)
+      const middleZoneTop = Math.round(height * 0.27)
       const middleZoneH = Math.round(height * 0.65)
       const py = middleZoneTop + Math.round((middleZoneH - targetH) / 2)
 
@@ -259,7 +259,7 @@ async function renderAdServerSide(
 
   let ty = topY
   // Faux extra-bold: stroke behind fill for thicker appearance
-  ctx.lineWidth = Math.round(headlineFontSize * 0.06)
+  ctx.lineWidth = Math.round(headlineFontSize * 0.03)
   ctx.strokeStyle = headlineColor
   ctx.lineJoin = "round"
   for (const l of lines) {
