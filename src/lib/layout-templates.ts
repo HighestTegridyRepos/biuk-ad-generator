@@ -68,6 +68,16 @@ export const layoutTemplates: LayoutTemplate[] = [
     }),
   },
   {
+    id: "checklist",
+    name: "Checklist",
+    description: "Product showcase with circular scene thumbnails, checkmarks, and accent banner",
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    getZones: (w, h, _sz) => ({
+      anchorZone: { x: Math.round(w * 0.45), y: Math.round(h * 0.15), width: Math.round(w * 0.55), height: Math.round(h * 0.76) },
+      messageZone: { x: Math.round(w * 0.05), y: 0, width: Math.round(w * 0.90), height: Math.round(h * 0.15) },
+    }),
+  },
+  {
     id: "corner-badge",
     name: "Corner Badge",
     description: "Anchor full bleed, Message bottom-left corner",

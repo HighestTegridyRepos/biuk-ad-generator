@@ -50,6 +50,7 @@ interface PipelineRequest {
   sceneId?: string
   backgroundImageDataUrl?: string
   beforeAfterScenes?: Array<{ dirtyImageDataUrl: string; cleanImageDataUrl: string }>
+  checklistImages?: Array<{ imageDataUrl: string; label: string }>
   bannerStyle?: "trustpilot" | "gold"
   socialProofText?: string
   accentColor?: string
@@ -256,6 +257,235 @@ async function renderBeforeAfterQuad(
     ctx.fillText(socialProofText, startX + starsWidth + gap, centerY)
   } else {
     // Gold banner (existing style)
+    ctx.fillStyle = "#D4C96B"
+    ctx.fillRect(0, bannerY, width, bannerH)
+    const bannerFontSize = Math.round(width * 0.04)
+    ctx.font = `bold ${bannerFontSize}px AdFont`
+    ctx.fillStyle = "#1a1a1a"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(`★★★★★  ${socialProofText}`, width / 2, bannerY + bannerH / 2)
+  }
+
+  const pngBuffer = canvas.toBuffer("image/png")
+  return `data:image/png;base64,${pngBuffer.toString("base64")}`
+}
+
+// ── Checklist layout renderer ─────────────────────────────────────
+
+async function renderChecklist(
+  width: number,
+  height: number,
+  headline: string,
+  checklistImages: Array<{ imageDataUrl: string; label: string }>,
+  productCutoutBase64: string | null,
+  socialProofText: string = "SUBSCRIBE & SAVE 20%",
+  bannerStyle: "trustpilot" | "gold" = "trustpilot",
+  accentColor: string = "#3BB8E8",
+): Promise<string> {
+  const { createCanvas, loadImage, GlobalFonts } = await import("@napi-rs/canvas")
+  const path = await import("path")
+  const fs = await import("fs")
+
+  try {
+    const fontDir = path.join(process.cwd(), "public", "fonts")
+    const regularFont = path.join(fontDir, "DejaVuSans.ttf")
+    const boldFont = path.join(fontDir, "DejaVuSans-Bold.ttf")
+    if (fs.existsSync(regularFont)) GlobalFonts.registerFromPath(regularFont, "AdFont")
+    if (fs.existsSync(boldFont)) GlobalFonts.registerFromPath(boldFont, "AdFontBold")
+  } catch { /* Font registration failed */ }
+
+  const canvas = createCanvas(width, height)
+  const ctx = canvas.getContext("2d")
+
+  // ── Zone dimensions ───────────────────────────────────────────
+  const headlineH = Math.round(height * 0.15)
+  const bannerH = Math.round(height * 0.09)
+  const bannerY = height - bannerH
+  const contentTop = headlineH
+  const contentH = bannerY - headlineH
+
+  // ── 1. Background ────────────────────────────────────────────
+  ctx.fillStyle = "#F8F8F8"
+  ctx.fillRect(0, 0, width, height)
+
+  // ── 2. Headline zone with dark gradient band ─────────────────
+  headline = headline.toUpperCase()
+  const headlineFontSize = Math.round(width * 0.065)
+  ctx.font = `900 ${headlineFontSize}px AdFontBold, AdFont, sans-serif`
+
+  // Word-wrap headline
+  const maxTextWidth = Math.round(width * 0.92)
+  const words = headline.split(" ")
+  let line = ""
+  const lines: string[] = []
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxTextWidth && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+
+  const lineHeight = headlineFontSize * 1.15
+  const totalTextH = lines.length * lineHeight
+
+  // Dark gradient band
+  const gradH = headlineH + Math.round(height * 0.03)
+  const headGrad = ctx.createLinearGradient(0, 0, 0, gradH)
+  headGrad.addColorStop(0, "rgba(0,0,0,0.75)")
+  headGrad.addColorStop(0.8, "rgba(0,0,0,0.50)")
+  headGrad.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = headGrad
+  ctx.fillRect(0, 0, width, gradH)
+
+  // Draw headline text
+  ctx.fillStyle = "#FFFFFF"
+  ctx.font = `900 ${headlineFontSize}px AdFontBold, AdFont, sans-serif`
+  ctx.textAlign = "center"
+  ctx.textBaseline = "top"
+  ctx.strokeStyle = "#FFFFFF"
+  ctx.lineWidth = Math.round(headlineFontSize * 0.02)
+  ctx.lineJoin = "round"
+  const textStartY = Math.round((headlineH - totalTextH) / 2)
+  for (let i = 0; i < lines.length; i++) {
+    const y = textStartY + i * lineHeight
+    ctx.strokeText(lines[i], width / 2, y)
+    ctx.fillText(lines[i], width / 2, y)
+  }
+
+  // ── 3. Left column — checklist thumbnails ─────────────────────
+  const thumbDiameter = Math.round(width * 0.18)
+  const thumbRadius = thumbDiameter / 2
+  const colCenterX = Math.round(width * 0.22)
+  const thumbCount = Math.min(checklistImages.length, 4)
+  const labelFontSize = Math.round(width * 0.022)
+  const labelGap = Math.round(height * 0.008)
+  const thumbSpacing = Math.round(contentH / (thumbCount + 0.5))
+  const firstThumbY = contentTop + Math.round(thumbSpacing * 0.4)
+
+  for (let i = 0; i < thumbCount; i++) {
+    const cy = firstThumbY + i * thumbSpacing + thumbRadius
+    const cx = colCenterX
+
+    // Draw circular image
+    try {
+      const match = checklistImages[i].imageDataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
+      if (match) {
+        const buf = Buffer.from(match[1], "base64")
+        const img = await loadImage(buf)
+
+        // Cover-fit crop to circle
+        const imgAspect = img.width / img.height
+        let sx = 0, sy = 0, sw = img.width, sh = img.height
+        if (imgAspect > 1) {
+          sw = img.height
+          sx = (img.width - sw) / 2
+        } else {
+          sh = img.width
+          sy = (img.height - sh) / 2
+        }
+
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(cx, cy, thumbRadius, 0, Math.PI * 2)
+        ctx.clip()
+        ctx.drawImage(img, sx, sy, sw, sh, cx - thumbRadius, cy - thumbRadius, thumbDiameter, thumbDiameter)
+        ctx.restore()
+      }
+    } catch { /* Skip failed image */ }
+
+    // Circle border
+    ctx.beginPath()
+    ctx.arc(cx, cy, thumbRadius, 0, Math.PI * 2)
+    ctx.strokeStyle = accentColor
+    ctx.lineWidth = 3
+    ctx.stroke()
+
+    // Checkmark badge (bottom-right)
+    const badgeSize = Math.round(thumbDiameter * 0.30)
+    const badgeR = badgeSize / 2
+    const badgeX = cx + thumbRadius * 0.65
+    const badgeY = cy + thumbRadius * 0.65
+
+    ctx.beginPath()
+    ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2)
+    ctx.fillStyle = accentColor
+    ctx.fill()
+    // White border on badge
+    ctx.strokeStyle = "#FFFFFF"
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // Checkmark inside badge
+    ctx.fillStyle = "#FFFFFF"
+    ctx.font = `bold ${Math.round(badgeSize * 0.6)}px AdFont, sans-serif`
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText("✓", badgeX, badgeY)
+
+    // Label below circle
+    ctx.fillStyle = "#555555"
+    ctx.font = `bold ${labelFontSize}px AdFontBold, AdFont, sans-serif`
+    ctx.textAlign = "center"
+    ctx.textBaseline = "top"
+    ctx.fillText(checklistImages[i].label, cx, cy + thumbRadius + labelGap)
+  }
+
+  // ── 4. Right column — product image ───────────────────────────
+  if (productCutoutBase64) {
+    try {
+      const cutoutBuf = Buffer.from(productCutoutBase64, "base64")
+      const cutoutImg = await loadImage(cutoutBuf)
+      const targetH = Math.round(height * 0.65)
+      const scale = targetH / cutoutImg.height
+      const targetW = Math.round(cutoutImg.width * scale)
+      const px = Math.round(width * 0.70 - targetW / 2)
+      const py = contentTop + Math.round((contentH - targetH) / 2)
+
+      ctx.save()
+      ctx.shadowColor = "rgba(0,0,0,0.30)"
+      ctx.shadowBlur = 25
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 8
+      ctx.drawImage(cutoutImg, px, py, targetW, targetH)
+      ctx.restore()
+    } catch (err) {
+      console.warn("Product overlay failed:", err)
+    }
+  }
+
+  // ── 5. Bottom banner ──────────────────────────────────────────
+  if (bannerStyle === "trustpilot") {
+    ctx.fillStyle = accentColor
+    ctx.fillRect(0, bannerY, width, bannerH)
+
+    const stars = "★★★★★"
+    const starFontSize = Math.round(bannerH * 0.45)
+    const bannerFontSize = Math.round(width * 0.042)
+    ctx.font = `bold ${starFontSize}px AdFont, sans-serif`
+    ctx.fillStyle = "#FFFFFF"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+
+    const starsWidth = ctx.measureText(stars).width
+    const gap = Math.round(width * 0.025)
+    ctx.font = `bold ${bannerFontSize}px AdFontBold, AdFont, sans-serif`
+    const textWidth = ctx.measureText(socialProofText).width
+    const totalW = starsWidth + gap + textWidth
+    const startX = (width - totalW) / 2
+    const centerY = bannerY + bannerH / 2
+
+    ctx.font = `bold ${starFontSize}px AdFont, sans-serif`
+    ctx.textAlign = "left"
+    ctx.fillText(stars, startX, centerY)
+
+    ctx.font = `bold ${bannerFontSize}px AdFontBold, AdFont, sans-serif`
+    ctx.fillText(socialProofText, startX + starsWidth + gap, centerY)
+  } else {
     ctx.fillStyle = "#D4C96B"
     ctx.fillRect(0, bannerY, width, bannerH)
     const bannerFontSize = Math.round(width * 0.04)
@@ -790,11 +1020,12 @@ export async function POST(request: NextRequest) {
   const backgroundImageDataUrl = body.backgroundImageDataUrl || null
   const sceneId = body.sceneId || null
   const beforeAfterScenes = body.beforeAfterScenes || null
+  const checklistImages = body.checklistImages || null
   const bannerStyle = body.bannerStyle || (layout === "before-after-quad" ? "trustpilot" : "gold")
   const socialProofText = body.socialProofText || "SUBSCRIBE & SAVE 20%"
   const accentColor = body.accentColor || "#4AADE0"
 
-  if (layout !== "before-after-quad" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
+  if (layout !== "before-after-quad" && layout !== "checklist" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
     return NextResponse.json({ error: "A brief (string, min 10 chars) is required" }, { status: 400 })
   }
 
@@ -882,6 +1113,93 @@ export async function POST(request: NextRequest) {
           imageDataUrl: finalImageDataUrl,
           label: "Before/After Quad Ad",
           headline: quadHeadline,
+          subhead: null,
+          cta: "SHOP NOW",
+          callouts: [],
+        }],
+        productIntelligence: null,
+      })
+    }
+
+    // ── CHECKLIST: separate pipeline path ───────────────────────────
+    if (layout === "checklist") {
+      logInfo(ROUTE_NAME, "Checklist layout requested")
+
+      if (!checklistImages || checklistImages.length < 1) {
+        return NextResponse.json({ error: "checklist layout requires checklistImages array with at least 1 item" }, { status: 400 })
+      }
+
+      let checklistHeadline: string
+      if (headlineOverride) {
+        checklistHeadline = headlineOverride
+      } else if (brief) {
+        try {
+          const headlineRaw = await generateText(
+            GEMINI_FLASH,
+            "You write short, punchy ad headlines for cleaning products. Return ONLY the headline text, nothing else. ALL CAPS. Max 6 words.",
+            `Product brief: ${brief}\n\nWrite a headline for a product showcase ad showing it works on multiple surfaces.`,
+            15_000
+          )
+          checklistHeadline = headlineRaw.trim().replace(/^["']/g, "").replace(/["']$/g, "").toUpperCase()
+        } catch {
+          checklistHeadline = "ONE BOTTLE. EVERY SURFACE."
+        }
+      } else {
+        checklistHeadline = "ONE BOTTLE. EVERY SURFACE."
+      }
+
+      let productCutoutBase64: string | null = null
+      if (productUrl) {
+        logInfo(ROUTE_NAME, "Checklist: Scraping product image")
+        try {
+          const heroImageUrl = await scrapeProductHeroImage(productUrl)
+          if (heroImageUrl) {
+            const imgRes = await fetch(heroImageUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+              signal: AbortSignal.timeout(15000),
+            })
+            if (imgRes.ok) {
+              const imgBuf = await imgRes.arrayBuffer()
+              const cleanCutout = await removeBackground(Buffer.from(imgBuf))
+              if (cleanCutout) {
+                productCutoutBase64 = cleanCutout.toString("base64")
+                logInfo(ROUTE_NAME, "Checklist: Background removed")
+              } else {
+                productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
+              }
+            }
+          }
+        } catch (err) {
+          logWarn(ROUTE_NAME, `Checklist: Product image failed (${(err as Error).message})`)
+        }
+      }
+
+      logInfo(ROUTE_NAME, "Checklist: Rendering")
+      const finalImageDataUrl = await renderChecklist(
+        width,
+        height,
+        checklistHeadline,
+        checklistImages.slice(0, 4),
+        productCutoutBase64,
+        socialProofText,
+        bannerStyle === "trustpilot" ? "trustpilot" : "gold",
+        accentColor,
+      )
+
+      logInfo(ROUTE_NAME, "Checklist: Done")
+
+      return NextResponse.json({
+        concepts: [],
+        selectedConcept: null,
+        imagePrompt: "checklist layout",
+        generatedImageUrl: finalImageDataUrl,
+        imageDescription: "Checklist layout with product and surface thumbnails",
+        headlines: [{ id: uuid(), headline: checklistHeadline, subhead: null, cta: "SHOP NOW" }],
+        selectedHeadline: { id: uuid(), headline: checklistHeadline, subhead: null, cta: "SHOP NOW" },
+        finalAds: [{
+          imageDataUrl: finalImageDataUrl,
+          label: "Checklist Ad",
+          headline: checklistHeadline,
           subhead: null,
           cta: "SHOP NOW",
           callouts: [],
