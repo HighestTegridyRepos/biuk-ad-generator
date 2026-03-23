@@ -145,12 +145,6 @@ export const IMAGE_PROMPT_SYSTEM_PROMPT = `You are an expert at writing image ge
 
 Your job is to write 3 detailed image generation prompts based on the ad concept and layout specifications. The generated image will be used as the background/anchor of a social media ad with text overlaid later.
 
-COMPOSITION & NEGATIVE SPACE (critical):
-- You MUST specify exactly where negative space / low-detail areas should be, using concrete spatial descriptions: "the top 30% of the frame", "a smooth gradient area occupying the left third", etc.
-- Describe what should NOT be in the text area: no fine detail, no busy patterns, no faces, no product elements
-- The negative space region must have enough tonal contrast for overlaid text to be readable
-- If text goes on a dark area, the negative space should be dark/muted; if on light, keep it bright/airy
-
 VISUAL DIRECTION (be extremely specific):
 - Camera angle and distance: "shot from 45° above", "tight macro at f/2.8", "environmental wide at 24mm"
 - Lighting: specify direction, color temperature, quality — "warm golden hour side-light from camera-left, 3200K, soft diffused"
@@ -165,7 +159,6 @@ When the product is a cleaner, stain remover, or household cleaning solution, ge
 - The mess should be in an otherwise nice, aspirational home — beautiful furniture, expensive-looking carpet, stylish interiors. Contrast between the nice home and the gross mess creates emotional urgency
 - Shoot close-up on the stain/mess — fill the frame with the problem
 - Lighting: slightly harsh and unflattering to emphasize mess texture and make it look worse (avoid warm, cozy, flattering light)
-- Leave the designated text/product overlay zone clean and clear
 - The image should make someone wince and want to fix it immediately
 
 ABSOLUTE RULES:
@@ -177,7 +170,7 @@ ABSOLUTE RULES:
 RANKING:
 - Rank the 3 prompts from best to worst (1 = best, 3 = weakest)
 - For each, include a 1-sentence reason WHY it ranks where it does
-- The #1 prompt should be the one most likely to stop the scroll AND leave clean text space
+- The #1 prompt should be the one most likely to stop the scroll
 
 Return your response as JSON:
 {
@@ -204,16 +197,10 @@ export function buildImagePromptUserPrompt(
   const aspectRatio = width === height ? "1:1" : width > height ? `${width}:${height}` : `${height}:${width} (portrait)`
 
   // Calculate what percentage of the frame the text zone occupies
-  const isVertical = messageZonePosition.includes("top") || messageZonePosition.includes("bottom")
-  const zonePercent = isVertical ? "~30%" : "~35%"
-
   let prompt = `Concept: "${concept.hook}" (${concept.mechanism})
 Rationale: ${concept.rationale}
 
-Canvas: ${width}×${height}px (${aspectRatio})
-Text placement zone: ${messageZonePosition} of the frame (approximately ${zonePercent} of the image)
-
-CRITICAL: The ${messageZonePosition} must be a clean, low-detail area suitable for overlaid text. No busy patterns, faces, or key visual elements in that region.`
+Canvas: ${width}×${height}px (${aspectRatio})`
 
   if (contrastMethod) {
     const contrastHint: Record<string, string> = {

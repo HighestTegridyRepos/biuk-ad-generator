@@ -636,7 +636,7 @@ export async function POST(request: NextRequest) {
     // Pick rank 1 (or fallback to first)
     const bestPrompt = imagePrompts.find((p) => p.rank === 1) ?? imagePrompts[0]
     let imagePromptText = bestPrompt.text
-    imagePromptText += ". Photorealistic, shot on Canon EOS R5, 35mm lens, natural lighting. 4K resolution, ultra detailed textures. No text, no watermarks, no artifacts."
+    imagePromptText += ". Ultra photorealistic photograph. Shot on Canon EOS R5 with 35mm f/1.4 lens. Shallow depth of field. Natural dramatic lighting. 4K resolution, razor sharp textures. Professional commercial photography. No text, no logos, no watermarks, no borders, no artifacts, no empty spaces."
     logInfo(ROUTE_NAME, "Step 2 done")
 
     // ── STEP 3: Generate image ────────────────────────────────────
