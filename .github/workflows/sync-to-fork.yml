@@ -7,15 +7,13 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Sync fork instantly
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v4
         with:
-          github-token: ${{ secrets.FORK_SYNC_TOKEN }}
-          script: |
-            const result = await github.request("POST /repos/{owner}/{repo}/merge-upstream", {
-              owner: "HighestTegridyRepos",
-              repo: context.repo.repo,
-              branch: "main"
-            });
-            console.log(result.data.message);
+          fetch-depth: 0
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+
+      - name: Push to fork mirror
+        run: |
+          git remote add fork https://x-access-token:${{ secrets.FORK_SYNC_TOKEN }}@github.com/HighestTegridyRepos/${{ github.event.repository.name }}.git
+          git push fork main --force
 
