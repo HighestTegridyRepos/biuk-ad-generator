@@ -865,9 +865,15 @@ function autoPositionCallouts(
   const bottomLeftY = Math.round(leftZoneTop + leftZoneH * 0.68)
   const bottomRightY = Math.round(rightZoneTop + rightZoneH * 0.75)
 
-  // Product bounds — use actual computed bounds if available, else estimate center 30%
-  const productLeftEdge = productBounds ? productBounds.x : Math.round(width * 0.35)
-  const productRightEdge = productBounds ? productBounds.x + productBounds.w : Math.round(width * 0.65)
+  // Product anchor zone — the visible bottle body (not cutout with transparent padding)
+  // Product is always horizontally centered. Visible body is ~20-25% of canvas width.
+  // Use a tighter zone than the full cutout bounds.
+  const productCenterX = Math.round(width / 2)
+  const visibleProductHalfW = productBounds
+    ? Math.round(productBounds.w * 0.35)  // ~35% of cutout width = visible bottle body
+    : Math.round(width * 0.12)            // ~12% from center
+  const productLeftEdge = productCenterX - visibleProductHalfW
+  const productRightEdge = productCenterX + visibleProductHalfW
   const productTop = productBounds ? productBounds.y : headlineZoneBottom + Math.round(20 * s)
   const productBottom = productBounds ? productBounds.y + productBounds.h : bannerTop - Math.round(50 * s)
   const productH = productBottom - productTop
