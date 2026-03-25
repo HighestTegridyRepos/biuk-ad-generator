@@ -1133,7 +1133,7 @@ async function removeWhiteBackground(imageBuffer: Buffer): Promise<Buffer | null
 }
 
 // Post-process cutout PNG to remove checkerboard artifacts from Gemini bg removal
-// Gemini sometimes renders "transparent" areas as literal grey/white checkerboard pixels
+// Two-pass approach: 1) flood-fill from edges, 2) detect remaining checkerboard by pattern
 async function cleanCheckerboardArtifacts(pngBase64: string): Promise<string> {
   try {
     const { createCanvas, loadImage } = await import("@napi-rs/canvas")
@@ -1146,66 +1146,103 @@ async function cleanCheckerboardArtifacts(pngBase64: string): Promise<string> {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const pixels = imageData.data
     const w = canvas.width, h = canvas.height
-
-    // Detect checkerboard: alternating grey (~191-204) and white (~240-255) in grid pattern
-    // Typical checkerboard uses 8x8, 10x10, or 16x16 squares
-    // Strategy: flood-fill from edges, targeting grey/white pixels (same as white-bg removal)
-    // but with a wider color range to catch checkerboard grey
     const totalPixels = pixels.length / 4
+    const toRemove = new Uint8Array(totalPixels)
+
+    // Helper: is this pixel neutral (grey or white)?
+    function isNeutral(idx: number): boolean {
+      const pi = idx * 4
+      const r = pixels[pi], g = pixels[pi + 1], b = pixels[pi + 2], a = pixels[pi + 3]
+      if (a < 50) return true  // already transparent
+      if (r > 220 && g > 220 && b > 220) return true  // white
+      // Neutral grey: all channels similar, in grey range
+      if (r > 140 && r < 230 && Math.abs(r - g) < 20 && Math.abs(r - b) < 20) return true
+      return false
+    }
+
+    // PASS 1: Flood-fill from edges (catches large connected bg areas)
     const visited = new Uint8Array(totalPixels)
     const queue: number[] = []
-
-    // Seed from all 4 edges
     for (let x = 0; x < w; x++) { queue.push(x); queue.push((h - 1) * w + x) }
     for (let y = 0; y < h; y++) { queue.push(y * w); queue.push(y * w + (w - 1)) }
 
     while (queue.length > 0) {
       const idx = queue.pop()!
       if (idx < 0 || idx >= totalPixels || visited[idx]) continue
-      const pi = idx * 4
-      const r = pixels[pi], g = pixels[pi + 1], b = pixels[pi + 2], a = pixels[pi + 3]
+      if (!isNeutral(idx)) continue
+      visited[idx] = 1
+      toRemove[idx] = 1
+      const x = idx % w, y = Math.floor(idx / w)
+      if (x > 0) queue.push(idx - 1)
+      if (x < w - 1) queue.push(idx + 1)
+      if (y > 0) queue.push(idx - w)
+      if (y < h - 1) queue.push(idx + w)
+    }
 
-      // Match checkerboard colors: white (>225) OR grey (150-225, neutral)
-      // Also match already-transparent pixels
-      // Gemini checkerboard uses various shades — wide range needed
-      const isWhite = r > 225 && g > 225 && b > 225
-      const isGrey = r > 145 && r < 230 && g > 145 && g < 230 && b > 145 && b < 230
-        && Math.abs(r - g) < 15 && Math.abs(r - b) < 15  // must be neutral grey
-      const isTransparent = a < 50
+    // PASS 2: Pattern detection — find remaining checkerboard islands
+    // Checkerboard = neutral pixel where ≥3 of its 8 neighbors are also neutral
+    // AND the pixel alternates brightness with its neighbors (grey next to white)
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x
+        if (toRemove[idx] || !isNeutral(idx)) continue
 
-      if (isWhite || isGrey || isTransparent) {
-        visited[idx] = 1
-        const x = idx % w, y = Math.floor(idx / w)
-        if (x > 0) queue.push(idx - 1)
-        if (x < w - 1) queue.push(idx + 1)
-        if (y > 0) queue.push(idx - w)
-        if (y < h - 1) queue.push(idx + w)
+        // Count neutral neighbors in 8-connected
+        let neutralNeighbors = 0
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue
+            const ni = (y + dy) * w + (x + dx)
+            if (isNeutral(ni) || toRemove[ni]) neutralNeighbors++
+          }
+        }
+
+        // If most neighbors are neutral/removed, this is likely checkerboard
+        if (neutralNeighbors >= 4) {
+          toRemove[idx] = 1
+        }
       }
     }
 
-    // Make visited pixels transparent
+    // PASS 3: Expand removal by 1px to catch fringe pixels
+    const expanded = new Uint8Array(totalPixels)
+    for (let i = 0; i < totalPixels; i++) expanded[i] = toRemove[i]
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x
+        if (expanded[idx]) continue
+        if (!isNeutral(idx)) continue
+        // If any neighbor is marked for removal, remove this too
+        let adjacentRemoved = 0
+        if (toRemove[idx - 1]) adjacentRemoved++
+        if (toRemove[idx + 1]) adjacentRemoved++
+        if (toRemove[idx - w]) adjacentRemoved++
+        if (toRemove[idx + w]) adjacentRemoved++
+        if (adjacentRemoved >= 2) expanded[idx] = 1
+      }
+    }
+
+    // Apply removal
     let cleaned = 0
     for (let i = 0; i < totalPixels; i++) {
-      if (visited[i]) {
+      if (expanded[i]) {
         pixels[i * 4 + 3] = 0
         cleaned++
       }
     }
 
-    // If we cleaned >90% of pixels, the product was lost — return original
+    // If we cleaned >90% of pixels, product was destroyed — return original
     if (cleaned / totalPixels > 0.90) return pngBase64
 
-    // Soften edges: partially transparent border pixels
+    // Soften edges for smooth transitions
     for (let i = 0; i < totalPixels; i++) {
-      if (!visited[i] && pixels[i * 4 + 3] > 0) {
+      if (!expanded[i] && pixels[i * 4 + 3] > 0) {
         const x = i % w, y = Math.floor(i / w)
-        // Check 4-neighbors for transparent
         let transparentNeighbors = 0
-        if (x > 0 && visited[i - 1]) transparentNeighbors++
-        if (x < w - 1 && visited[i + 1]) transparentNeighbors++
-        if (y > 0 && visited[i - w]) transparentNeighbors++
-        if (y < h - 1 && visited[i + w]) transparentNeighbors++
-        // Edge pixel: soften alpha based on how many transparent neighbors
+        if (x > 0 && expanded[i - 1]) transparentNeighbors++
+        if (x < w - 1 && expanded[i + 1]) transparentNeighbors++
+        if (y > 0 && expanded[i - w]) transparentNeighbors++
+        if (y < h - 1 && expanded[i + w]) transparentNeighbors++
         if (transparentNeighbors >= 2) {
           pixels[i * 4 + 3] = Math.round(pixels[i * 4 + 3] * 0.5)
         } else if (transparentNeighbors === 1) {
@@ -1217,7 +1254,7 @@ async function cleanCheckerboardArtifacts(pngBase64: string): Promise<string> {
     ctx.putImageData(imageData, 0, 0)
     return Buffer.from(canvas.toBuffer("image/png")).toString("base64")
   } catch {
-    return pngBase64  // On error, return original
+    return pngBase64
   }
 }
 
