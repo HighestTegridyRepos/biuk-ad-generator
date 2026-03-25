@@ -740,9 +740,9 @@ async function renderAdServerSide(
     const fontSize = Math.round(width * 0.038)
     const padX = 24
     const padY = 18
-    const dotR = Math.max(6, Math.round(width * 0.008))
-    const lineW = Math.max(3, Math.round(width * 0.003))
-    const borderR = 8
+    const dotR = Math.round(6 * (width / 1080))   // 6px at 1080
+    const lineW = Math.round(2 * (width / 1080))   // 2px at 1080
+    const borderR = Math.round(12 * (width / 1080))  // 12px at 1080
 
     ctx.font = `600 ${fontSize}px ${fontFamily}`
     const calloutLines = callout.text.split("\n")
@@ -830,38 +830,69 @@ function autoPositionCallouts(
   width: number,
   height: number
 ): Array<{ text: string; position: { x: number; y: number }; anchorPoint: { x: number; y: number } }> {
-  // Exact callout positions — spec'd for 1080×1080, scale proportionally
-  // Position = bubble top-left corner. Bubbles are ~200×90px.
-  // Spec gives center coords, so offset by half-bubble: bx = centerX - 100, by = centerY - 45
-  const s = width / 1080  // scale factor for non-1080 canvases
-  const bubbleW = Math.round(200 * s)
-  const bubbleH = Math.round(90 * s)
+  // Final callout placement — RED-approved zigzag (L-R-L-R)
+  // All values stored as proportions, reference is 1080×1080
+
+  // Bubble size: 190×76px at 1080
+  const s = width / 1080
+  const bubbleW = Math.round(190 * s)
+  const bubbleH = Math.round(76 * s)
   const halfW = Math.round(bubbleW / 2)
   const halfH = Math.round(bubbleH / 2)
 
-  // Bubble centers: left=140, right=940, top-left Y=330, top-right Y=380, bot-left Y=620, bot-right Y=670
-  // Anchors: all at X≈540 (product center), staggered Y for different product points
+  // Column centers
+  const leftCenterX = Math.round(160 * s)
+  const rightCenterX = Math.round(920 * s)
+
+  // Vertical zones — relative to headline zone bottom and banner top
+  const headlineZoneBottom = Math.round(height * 0.194)  // ~210px at 1080
+  const bannerTop = height - Math.round(height * 0.09)   // ~85px banner
+  const zoneEnd = bannerTop - Math.round(60 * s)
+
+  const leftZoneTop = headlineZoneBottom + Math.round(130 * s)
+  const rightZoneTop = headlineZoneBottom + Math.round(80 * s)
+  const leftZoneH = zoneEnd - leftZoneTop
+  const rightZoneH = zoneEnd - rightZoneTop
+
+  // Bubble center Y positions within their zones
+  const topLeftY = Math.round(leftZoneTop + leftZoneH * 0.22)
+  const topRightY = Math.round(rightZoneTop + rightZoneH * 0.30)
+  const bottomLeftY = Math.round(leftZoneTop + leftZoneH * 0.68)
+  const bottomRightY = Math.round(rightZoneTop + rightZoneH * 0.75)
+
+  // Product bounds (center 30% of canvas)
+  const productLeftEdge = Math.round(width * 0.35)
+  const productRightEdge = Math.round(width * 0.65)
+  const productTop = headlineZoneBottom + Math.round(20 * s)
+  const productBottom = bannerTop - Math.round(50 * s)
+  const productH = productBottom - productTop
+  const anchorInset = Math.round(15 * s)
+
+  // Connector anchors: different points on product edges
   const positions = [
-    // top-left: center(140, 330), anchor at trigger area
-    { bx: Math.round(140 * s) - halfW, by: Math.round(330 * s) - halfH,
-      ax: Math.round(540 * s), ay: Math.round(350 * s) },
-    // top-right: center(940, 380), anchor at neck area — slight Y offset from top-left
-    { bx: Math.round(940 * s) - halfW, by: Math.round(380 * s) - halfH,
-      ax: Math.round(540 * s), ay: Math.round(400 * s) },
-    // bottom-left: center(140, 620), anchor at mid-label
-    { bx: Math.round(140 * s) - halfW, by: Math.round(620 * s) - halfH,
-      ax: Math.round(540 * s), ay: Math.round(580 * s) },
-    // bottom-right: center(940, 670), anchor at lower label — slight Y offset from bottom-left
-    { bx: Math.round(940 * s) - halfW, by: Math.round(670 * s) - halfH,
-      ax: Math.round(540 * s), ay: Math.round(640 * s) },
+    // top-left bubble → product left edge, 18% down product height
+    { cx: leftCenterX, cy: topLeftY,
+      ax: productLeftEdge + anchorInset, ay: productTop + Math.round(productH * 0.18) },
+    // top-right bubble → product right edge, 35% down product height
+    { cx: rightCenterX, cy: topRightY,
+      ax: productRightEdge - anchorInset, ay: productTop + Math.round(productH * 0.35) },
+    // bottom-left bubble → product left edge, 62% down product height
+    { cx: leftCenterX, cy: bottomLeftY,
+      ax: productLeftEdge + anchorInset, ay: productTop + Math.round(productH * 0.62) },
+    // bottom-right bubble → product right edge, 82% down product height
+    { cx: rightCenterX, cy: bottomRightY,
+      ax: productRightEdge - anchorInset, ay: productTop + Math.round(productH * 0.82) },
   ]
 
   return calloutInputs.map((callout, i) => {
     const pos = positions[i % positions.length]
     return {
       text: callout.text,
-      position: { x: pos.bx, y: pos.by },
-      // Use explicit anchor if provided, otherwise default toward product center
+      // position = top-left corner of bubble
+      position: {
+        x: pos.cx - halfW,
+        y: pos.cy - halfH,
+      },
       anchorPoint: {
         x: callout.anchorX !== undefined ? callout.anchorX * width : pos.ax,
         y: callout.anchorY !== undefined ? callout.anchorY * height : pos.ay,
