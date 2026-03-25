@@ -532,7 +532,7 @@ async function renderAdServerSide(
       }
 
       const bannerTopY = height - Math.round(height * 0.09)
-      const minClearance = 30  // ≥30px above banner
+      const minClearance = 40  // ≥30px above banner (use 40 for safety margin)
 
       let targetH = Math.round(height * targetHeightFrac)
       const scale = targetH / cutoutImg.height
@@ -831,7 +831,7 @@ function autoPositionCallouts(
   // Left bubbles: ≥60px from left edge (use max to guarantee minimum)
   // Right bubbles: left-edge at ~72% of canvas width, ~30-40px right margin
   // Top row: 45-48% from top; Bottom row: 62-66% from top
-  const leftBubbleX = Math.max(60, width * 0.06)
+  const leftBubbleX = Math.max(70, width * 0.07)
   const rightBubbleX = width * 0.72
   const positions = [
     // top-left
@@ -1408,23 +1408,31 @@ export async function POST(request: NextRequest) {
         const heroImageUrl = await scrapeProductHeroImage(productUrl)
         if (heroImageUrl) {
           logInfo(ROUTE_NAME, `Step 5.5: Found hero image ${heroImageUrl}`)
-          const imgRes = await fetch(heroImageUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
-            signal: AbortSignal.timeout(15000),
-          })
-          if (imgRes.ok) {
-            const imgBuf = await imgRes.arrayBuffer()
-            logInfo(ROUTE_NAME, "Step 5.5: Attempting background removal")
-            const cleanCutout = await removeBackground(Buffer.from(imgBuf))
-            if (cleanCutout) {
-              productCutoutBase64 = cleanCutout.toString("base64")
-              logInfo(ROUTE_NAME, "Step 5.5: Background removed successfully")
-            } else {
-              productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
-              logInfo(ROUTE_NAME, "Step 5.5: Background removal unavailable — using original image")
-            }
+
+          // Try native Gemini bg removal first (no green-screen artifacts like "undo" text)
+          logInfo(ROUTE_NAME, "Step 5.5: Attempting native background removal")
+          const nativeCutout = await removeBackgroundFromUrl(heroImageUrl)
+          if (nativeCutout) {
+            productCutoutBase64 = nativeCutout
+            logInfo(ROUTE_NAME, "Step 5.5: Native background removal succeeded")
           } else {
-            logWarn(ROUTE_NAME, `Step 5.5: Failed to fetch hero image (${imgRes.status}) — skipping product image`)
+            // Fallback: fetch image + green-screen method
+            logInfo(ROUTE_NAME, "Step 5.5: Native failed, trying green-screen fallback")
+            const imgRes = await fetch(heroImageUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+              signal: AbortSignal.timeout(15000),
+            })
+            if (imgRes.ok) {
+              const imgBuf = await imgRes.arrayBuffer()
+              const cleanCutout = await removeBackground(Buffer.from(imgBuf))
+              if (cleanCutout) {
+                productCutoutBase64 = cleanCutout.toString("base64")
+                logInfo(ROUTE_NAME, "Step 5.5: Green-screen background removal succeeded")
+              } else {
+                productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
+                logInfo(ROUTE_NAME, "Step 5.5: Background removal unavailable — using original image")
+              }
+            }
           }
         } else {
           logWarn(ROUTE_NAME, "Step 5.5: Could not find hero image — skipping product image")
