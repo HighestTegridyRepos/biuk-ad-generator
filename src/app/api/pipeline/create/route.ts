@@ -532,7 +532,7 @@ async function renderAdServerSide(
       }
 
       const bannerTopY = height - Math.round(height * 0.09)
-      const minClearance = 40  // ≥30px above banner (use 40 for safety margin)
+      const minClearance = 50  // ≥30px above banner (use 50 for extra safety)
 
       let targetH = Math.round(height * targetHeightFrac)
       const scale = targetH / cutoutImg.height
@@ -992,13 +992,44 @@ async function removeBackground(imageBuffer: Buffer): Promise<Buffer | null> {
   return null // both methods failed, caller uses original image
 }
 
-// Non-AI white background removal — works great for Shopify product photos on white/light BG
+// Check if image already has transparency (PNG with alpha channel) — use directly if so
+async function checkExistingTransparency(imageBuffer: Buffer): Promise<Buffer | null> {
+  try {
+    const { createCanvas, loadImage } = await import("@napi-rs/canvas")
+    const img = await loadImage(imageBuffer)
+    const canvas = createCanvas(img.width, img.height)
+    const ctx = canvas.getContext("2d")
+    ctx.drawImage(img, 0, 0)
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const pixels = imageData.data
+    const totalPixels = pixels.length / 4
+    let transparentPixels = 0
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i+3] < 128) transparentPixels++
+    }
+
+    // If ≥15% transparent, the image already has bg removed
+    if (transparentPixels / totalPixels >= 0.15) {
+      return imageBuffer  // Already has transparency, use as-is
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+// Non-AI white background removal — works for Shopify product photos on white/light BG
 async function removeWhiteBackground(imageBuffer: Buffer): Promise<Buffer | null> {
   try {
     const { createCanvas, loadImage } = await import("@napi-rs/canvas")
     const img = await loadImage(imageBuffer)
     const canvas = createCanvas(img.width, img.height)
     const ctx = canvas.getContext("2d")
+    // Fill with white first so transparent PNGs render on white (not checkerboard)
+    ctx.fillStyle = "#FFFFFF"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.drawImage(img, 0, 0)
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -1483,7 +1514,14 @@ export async function POST(request: NextRequest) {
           if (imgRes.ok) {
             const imgBuf = Buffer.from(await imgRes.arrayBuffer())
 
-            // Try non-AI white-bg removal first (fastest, zero artifacts)
+            // Check if image already has transparency (Shopify PNGs often do)
+            logInfo(ROUTE_NAME, "Step 5.5: Checking for existing transparency")
+            const alreadyTransparent = await checkExistingTransparency(imgBuf)
+            if (alreadyTransparent) {
+              productCutoutBase64 = alreadyTransparent.toString("base64")
+              logInfo(ROUTE_NAME, "Step 5.5: Image already has transparency — using directly (no AI)")
+            } else {
+            // Try non-AI white-bg removal (fastest, zero artifacts)
             logInfo(ROUTE_NAME, "Step 5.5: Trying white-bg removal (no AI)")
             const whiteBgCutout = await removeWhiteBackground(imgBuf)
             if (whiteBgCutout) {
@@ -1509,6 +1547,7 @@ export async function POST(request: NextRequest) {
                 }
               }
             }
+            } // close alreadyTransparent else
           }
         } else {
           logWarn(ROUTE_NAME, "Step 5.5: Could not find hero image — skipping product image")
