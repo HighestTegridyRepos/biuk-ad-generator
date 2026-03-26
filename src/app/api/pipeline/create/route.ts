@@ -929,67 +929,110 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;")
 }
 
-function createAdOverlaySvg(
+// Render text to a transparent PNG buffer using sharp's Pango text engine
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function renderTextPng(
+  sharp: any,
+  text: string,
+  opts: { fontSize?: number; bold?: boolean; color?: string; maxWidth?: number; align?: string }
+): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const sz = opts.fontSize ?? 32
+  const bold = opts.bold !== false ? "bold" : "normal"
+  const color = opts.color ?? "white"
+  const align = opts.align ?? "center"
+  const escaped = escapeXml(text)
+  const pango = `<span foreground="${color}" font_weight="${bold}" font="${sz}">${escaped}</span>`
+  const img = sharp({
+    text: {
+      text: pango,
+      rgba: true,
+      dpi: 150,
+      width: opts.maxWidth ?? 900,
+      align: align as any,
+    },
+  })
+  const buf = await img.png().toBuffer()
+  const meta = await sharp(buf).metadata()
+  return { buffer: buf, width: meta.width ?? 0, height: meta.height ?? 0 }
+}
+
+// Build all overlay layers as sharp composite inputs (no SVG text needed)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildOverlayLayers(
+  sharp: any,
   width: number,
   height: number,
   headline: string,
   subhead: string | null | undefined,
-  cta: string,
   callouts: Array<{ text: string; position: { x: number; y: number } }>,
   bannerColor: string,
   bannerText: string
-): string {
+): Promise<Array<{ input: Buffer; left: number; top: number }>> {
+  const layers: Array<{ input: Buffer; left: number; top: number }> = []
   const bannerH = Math.round(height * 0.09)
   const bannerY = height - bannerH
-  
-  // Headline zone (top ~20%)
-  const headlineY = Math.round(height * 0.15)
-  
-  // SVG with embedded styles
-  let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <style>
-    .headline { font-family: sans-serif; font-size: 52px; font-weight: bold; fill: white; text-anchor: middle; }
-    .subhead { font-family: sans-serif; font-size: 28px; fill: white; text-anchor: middle; }
-    .callout-text { font-family: sans-serif; font-size: 18px; font-weight: bold; fill: white; text-anchor: middle; }
-    .cta { font-family: sans-serif; font-size: 20px; font-weight: bold; fill: white; text-anchor: middle; }
-  </style>
-</defs>`
-  
-  // Headline shadow (dark stroke behind white text)
-  svg += `\n<text x="${width / 2}" y="${headlineY}" class="headline" stroke="rgba(0,0,0,0.7)" stroke-width="4" paint-order="stroke">${escapeXml(headline)}</text>`
-  
-  // Banner (bottom)
-  svg += `\n<rect x="0" y="${bannerY}" width="${width}" height="${bannerH}" fill="${escapeXml(bannerColor)}"/>`
-  svg += `\n<text x="${width / 2}" y="${bannerY + bannerH / 2 + 7}" class="cta">${escapeXml(bannerText)}</text>`
-  
-  // Subhead (if provided)
+
+  // 1. Banner rectangle (solid color bar)
+  const bannerBar = await sharp({
+    create: { width, height: bannerH, channels: 4, background: bannerColor },
+  }).png().toBuffer()
+  layers.push({ input: bannerBar, left: 0, top: bannerY })
+
+  // 2. Banner text (centered)
+  const bannerTxt = await renderTextPng(sharp, bannerText, { fontSize: 22, bold: true, color: "white", maxWidth: width - 40 })
+  layers.push({
+    input: bannerTxt.buffer,
+    left: Math.max(0, Math.round((width - bannerTxt.width) / 2)),
+    top: Math.max(bannerY, Math.round(bannerY + (bannerH - bannerTxt.height) / 2)),
+  })
+
+  // 3. Headline (top ~15%)
+  const headlineTxt = await renderTextPng(sharp, headline, { fontSize: 48, bold: true, color: "white", maxWidth: width - 80 })
+  const headlineY = Math.round(height * 0.05)
+  layers.push({
+    input: headlineTxt.buffer,
+    left: Math.max(0, Math.round((width - headlineTxt.width) / 2)),
+    top: headlineY,
+  })
+
+  // 4. Subhead
   if (subhead) {
-    svg += `\n<text x="${width / 2}" y="${headlineY + 50}" class="subhead" stroke="rgba(0,0,0,0.5)" stroke-width="3" paint-order="stroke">${escapeXml(subhead)}</text>`
+    const subTxt = await renderTextPng(sharp, subhead, { fontSize: 26, bold: false, color: "white", maxWidth: width - 100 })
+    layers.push({
+      input: subTxt.buffer,
+      left: Math.max(0, Math.round((width - subTxt.width) / 2)),
+      top: headlineY + headlineTxt.height + 8,
+    })
   }
-  
-  // Callout bubbles
+
+  // 5. Callout bubbles (dark rounded rect + text)
   for (const callout of callouts) {
-    const bubbleW = 190
-    const bubbleH = 76
-    const x = callout.position.x
-    const y = callout.position.y
+    const bubbleW = 200
+    const bubbleH = 80
     const rx = 12
+    const cx = callout.position.x
+    const cy = callout.position.y
+
+    // Create bubble as SVG rect (no text — just the shape)
+    const bubbleSvg = `<svg width="${bubbleW}" height="${bubbleH}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="${bubbleW - 2}" height="${bubbleH - 2}" rx="${rx}" fill="rgba(0,0,0,0.75)" stroke="${escapeXml(bannerColor)}" stroke-width="3"/>
+    </svg>`
+    const bubbleBuf = await sharp(Buffer.from(bubbleSvg)).png().toBuffer()
     
-    // Dark rounded rect bubble with brand-color outline
-    svg += `\n<rect x="${x - bubbleW / 2}" y="${y - bubbleH / 2}" width="${bubbleW}" height="${bubbleH}" rx="${rx}" fill="rgba(0,0,0,0.75)" stroke="${escapeXml(bannerColor)}" stroke-width="3"/>`
-    
-    // Text (centered in bubble)
-    const lines = callout.text.split("\n")
-    for (let i = 0; i < lines.length; i++) {
-      const lineY = y + (i - lines.length / 2 + 0.5) * 22
-      svg += `\n<text x="${x}" y="${lineY}" class="callout-text">${escapeXml(lines[i])}</text>`
-    }
+    const bx = Math.max(0, Math.min(width - bubbleW, Math.round(cx - bubbleW / 2)))
+    const by = Math.max(0, Math.min(height - bubbleH, Math.round(cy - bubbleH / 2)))
+    layers.push({ input: bubbleBuf, left: bx, top: by })
+
+    // Callout text (rendered with Pango, centered in bubble)
+    const cTxt = await renderTextPng(sharp, callout.text, { fontSize: 16, bold: true, color: "white", maxWidth: bubbleW - 20 })
+    layers.push({
+      input: cTxt.buffer,
+      left: Math.max(0, Math.round(bx + (bubbleW - cTxt.width) / 2)),
+      top: Math.max(0, Math.round(by + (bubbleH - cTxt.height) / 2)),
+    })
   }
-  
-  svg += `\n</svg>`
-  return svg
+
+  return layers
 }
 
 // ── Product image helpers ─────────────────────────────────────────
@@ -1866,28 +1909,20 @@ export async function POST(request: NextRequest) {
       const rawBgBuffer = Buffer.from(await bgResponse.arrayBuffer())
       const bgBuffer = await sharp(rawBgBuffer).resize(width, height, { fit: "cover" }).png().toBuffer()
       
-      // Create SVG with text + callouts + banner (sharp can render SVG)
-      const svgOverlay = createAdOverlaySvg(
+      // Build all text overlay layers using Pango text rendering (no SVG font issues)
+      const overlayLayers = await buildOverlayLayers(
+        sharp,
         width,
         height,
         headlineOverride ?? selectedHeadline.headline,
         subheadOverride ?? selectedHeadline.subhead,
-        selectedHeadline.cta,
         positionedCallouts,
         bannerColor,
         bannerText
       )
       
-      // Composite: background + SVG overlay + product cutout (if available)
-      let composed = sharp(bgBuffer)
-      
-      // Add SVG text/callouts overlay
-      composed = composed.composite([
-        {
-          input: Buffer.from(svgOverlay),
-          gravity: "northwest" as const,
-        },
-      ])
+      // Composite: background + all overlay layers
+      let composed = sharp(bgBuffer).composite(overlayLayers)
       
       // Add product cutout on top if available
       if (productCutoutBase64) {
