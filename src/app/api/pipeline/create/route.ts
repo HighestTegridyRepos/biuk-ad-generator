@@ -1860,10 +1860,11 @@ export async function POST(request: NextRequest) {
       const sharpModule = await import("sharp")
       const sharp = sharpModule.default
       
-      // Fetch background image
+      // Fetch background image and resize to target dimensions
       const bgResponse = await fetch(generatedImageUrl)
       if (!bgResponse.ok) throw new Error("Failed to fetch generated background")
-      const bgBuffer = Buffer.from(await bgResponse.arrayBuffer())
+      const rawBgBuffer = Buffer.from(await bgResponse.arrayBuffer())
+      const bgBuffer = await sharp(rawBgBuffer).resize(width, height, { fit: "cover" }).png().toBuffer()
       
       // Create SVG with text + callouts + banner (sharp can render SVG)
       const svgOverlay = createAdOverlaySvg(
@@ -1884,18 +1885,24 @@ export async function POST(request: NextRequest) {
       composed = composed.composite([
         {
           input: Buffer.from(svgOverlay),
-          gravity: "northwest" as any,
+          gravity: "northwest" as const,
         },
       ])
       
       // Add product cutout on top if available
       if (productCutoutBase64) {
-        const cutoutBuf = Buffer.from(productCutoutBase64, "base64")
+        const rawCutout = Buffer.from(productCutoutBase64, "base64")
+        // Resize product cutout to fit within product bounds (or default center position)
+        const pX = productBounds?.x ?? Math.round((width - 431) / 2)
+        const pY = productBounds?.y ?? 402
+        const pW = productBounds?.w ?? 431
+        const pH = productBounds?.h ?? 431
+        const resizedCutout = await sharp(rawCutout).resize(pW, pH, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()
         composed = composed.composite([
           {
-            input: cutoutBuf,
-            left: Math.round((width - 431) / 2), // Center horizontally (product is 431px)
-            top: 402, // Approved Y position
+            input: resizedCutout,
+            left: pX,
+            top: pY,
           },
         ])
       }
