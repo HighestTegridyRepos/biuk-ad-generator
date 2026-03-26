@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@napi-rs/canvas", "sharp"],
-  // Include font files in the serverless bundle
+  serverExternalPackages: ["sharp"],
   outputFileTracingIncludes: {
     "/api/pipeline/create": ["./src/fonts/**/*", "./fonts/**/*"],
   },
