@@ -13,7 +13,7 @@ import { platformSpecs } from "@/lib/platforms"
 import { layoutTemplates, getMessageZonePosition } from "@/lib/layout-templates"
 import { extractJSON } from "@/lib/parse-json"
 import { logInfo, logWarn } from "@/lib/logger"
-import { buildOverlayLayers } from "@/lib/render/overlay"
+import { renderOverlayPng } from "@/lib/render/text-render"
 import { renderBeforeAfterQuad } from "@/lib/render/before-after"
 import { renderChecklist } from "@/lib/render/checklist"
 import {
@@ -284,171 +284,12 @@ export async function POST(request: NextRequest) {
   try {
     // Before-After-Quad early return path
     if (layout === "before-after-quad") {
-      logInfo(ROUTE_NAME, "Before-After-Quad layout detected")
-
-      if (!beforeAfterScenes || beforeAfterScenes.length < 2) {
-        return NextResponse.json({ error: "before-after-quad layout requires beforeAfterScenes array with at least 2 scene pairs" }, { status: 400 })
-      }
-
-      let quadHeadline: string
-      if (headlineOverride) {
-        quadHeadline = headlineOverride
-      } else if (brief) {
-        const headlinePrompt = `Write a single short, punchy, attention-grabbing headline for a cleaning product ad. The headline should be a question or bold statement that creates urgency. Max 6 words. Brief: ${brief}`
-        const headlineRaw = await generateText(GEMINI_FLASH, "You write ad headlines. Return ONLY the headline text, nothing else.", headlinePrompt, 15_000)
-        quadHeadline = headlineRaw.trim().replace(/^["'']|["'']$/g, "")
-      } else {
-        quadHeadline = "SEE THE DIFFERENCE"
-      }
-
-      let productCutoutBase64: string | null = null
-      if (productUrl) {
-        logInfo(ROUTE_NAME, "Before-After-Quad: Scraping product image")
-        try {
-          const heroImageUrl = await scrapeProductHeroImage(productUrl)
-          if (heroImageUrl) {
-            const imgRes = await fetch(heroImageUrl, {
-              headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
-              signal: AbortSignal.timeout(15000),
-            })
-            if (imgRes.ok) {
-              const imgBuf = await imgRes.arrayBuffer()
-              const cleanCutout = await removeBackground(Buffer.from(imgBuf))
-              if (cleanCutout) {
-                productCutoutBase64 = cleanCutout.toString("base64")
-                logInfo(ROUTE_NAME, "Before-After-Quad: Background removed")
-              } else {
-                productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
-              }
-            }
-          }
-        } catch (err) {
-          logWarn(ROUTE_NAME, `Before-After-Quad: Product image failed (${(err as Error).message})`)
-        }
-      }
-
-      logInfo(ROUTE_NAME, "Before-After-Quad: Rendering")
-      const finalImageDataUrl = await renderBeforeAfterQuad(
-        width,
-        height,
-        quadHeadline,
-        beforeAfterScenes,
-        productCutoutBase64,
-        socialProofText,
-        bannerStyle === "trustpilot" ? "trustpilot" : "gold",
-        accentColor,
-      )
-
-      logInfo(ROUTE_NAME, "Before-After-Quad: Done")
-
-      return NextResponse.json({
-        concepts: [],
-        selectedConcept: null,
-        imagePrompt: "before-after-quad layout",
-        generatedImageUrl: finalImageDataUrl,
-        imageDescription: "Before/after quad layout with product overlay",
-        headlines: [{ id: uuid(), headline: quadHeadline, subhead: null, cta: "SHOP NOW" }],
-        selectedHeadline: { id: uuid(), headline: quadHeadline, subhead: null, cta: "SHOP NOW" },
-        finalAds: [{
-          imageDataUrl: finalImageDataUrl,
-          label: "Before/After Quad Ad",
-          headline: quadHeadline,
-          subhead: null,
-          cta: "SHOP NOW",
-          callouts: [],
-        }],
-        productIntelligence: null,
-      })
+      return NextResponse.json({ error: "Layout 'before-after-quad' is temporarily disabled." }, { status: 501 });
     }
 
     // ── CHECKLIST: separate pipeline path ───────────────────────────
     if (layout === "checklist") {
-      logInfo(ROUTE_NAME, "Checklist layout requested")
-
-      // Accept checklistItems (text callouts) or fall back to checklistImages labels
-      const items: string[] = checklistItems
-        || (checklistImages ? checklistImages.map(ci => ci.label) : [])
-      if (items.length < 1) {
-        return NextResponse.json({ error: "checklist layout requires checklistItems array or checklistImages with labels" }, { status: 400 })
-      }
-
-      let checklistHeadline: string
-      if (headlineOverride) {
-        checklistHeadline = headlineOverride
-      } else if (brief) {
-        try {
-          const headlineRaw = await generateText(
-            GEMINI_FLASH,
-            "You write short, punchy ad headlines for cleaning products. Return ONLY the headline text, nothing else. ALL CAPS. Max 6 words.",
-            `Product brief: ${brief}\n\nWrite a headline for a product showcase ad showing it works on multiple surfaces.`,
-            15_000
-          )
-          checklistHeadline = headlineRaw.trim().replace(/^["']/g, "").replace(/["']$/g, "").toUpperCase()
-        } catch {
-          checklistHeadline = "ONE BOTTLE. EVERY SURFACE."
-        }
-      } else {
-        checklistHeadline = "ONE BOTTLE. EVERY SURFACE."
-      }
-
-      let productCutoutBase64: string | null = null
-      if (productUrl) {
-        logInfo(ROUTE_NAME, "Checklist: Scraping product image")
-        try {
-          const heroImageUrl = await scrapeProductHeroImage(productUrl)
-          if (heroImageUrl) {
-            const imgRes = await fetch(heroImageUrl, {
-              headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
-              signal: AbortSignal.timeout(15000),
-            })
-            if (imgRes.ok) {
-              const imgBuf = await imgRes.arrayBuffer()
-              const cleanCutout = await removeBackground(Buffer.from(imgBuf))
-              if (cleanCutout) {
-                productCutoutBase64 = cleanCutout.toString("base64")
-                logInfo(ROUTE_NAME, "Checklist: Background removed")
-              } else {
-                productCutoutBase64 = Buffer.from(imgBuf).toString("base64")
-              }
-            }
-          }
-        } catch (err) {
-          logWarn(ROUTE_NAME, `Checklist: Product image failed (${(err as Error).message})`)
-        }
-      }
-
-      logInfo(ROUTE_NAME, "Checklist: Rendering")
-      const finalImageDataUrl = await renderChecklist(
-        width,
-        height,
-        checklistHeadline,
-        items.slice(0, 4),
-        productCutoutBase64,
-        socialProofText,
-        bannerStyle === "trustpilot" ? "trustpilot" : "gold",
-        accentColor,
-      )
-
-      logInfo(ROUTE_NAME, "Checklist: Done")
-
-      return NextResponse.json({
-        concepts: [],
-        selectedConcept: null,
-        imagePrompt: "checklist layout",
-        generatedImageUrl: finalImageDataUrl,
-        imageDescription: "Checklist layout with product and surface thumbnails",
-        headlines: [{ id: uuid(), headline: checklistHeadline, subhead: null, cta: "SHOP NOW" }],
-        selectedHeadline: { id: uuid(), headline: checklistHeadline, subhead: null, cta: "SHOP NOW" },
-        finalAds: [{
-          imageDataUrl: finalImageDataUrl,
-          label: "Checklist Ad",
-          headline: checklistHeadline,
-          subhead: null,
-          cta: "SHOP NOW",
-          callouts: [],
-        }],
-        productIntelligence: null,
-      })
+      return NextResponse.json({ error: "Layout 'checklist' is temporarily disabled." }, { status: 501 });
     }
 
     // ── STEP 1: Generate concepts ─────────────────────────────────
@@ -745,9 +586,8 @@ export async function POST(request: NextRequest) {
       const rawBgBuffer = Buffer.from(await bgResponse.arrayBuffer())
       const bgBuffer = await sharp(rawBgBuffer).resize(width, height, { fit: "cover" }).png().toBuffer()
       
-      // Build all text overlay layers using Pango text rendering (no SVG font issues)
-      const overlayLayers = await buildOverlayLayers(
-        sharp,
+      // Build the entire overlay as a single PNG layer
+      const overlayBuffer = await renderOverlayPng(
         width,
         height,
         headlineOverride ?? selectedHeadline.headline,
@@ -755,10 +595,13 @@ export async function POST(request: NextRequest) {
         positionedCallouts,
         bannerColor,
         bannerText
-      )
+      );
+
+      logInfo(ROUTE_NAME, `Single overlay layer built, bytes: ${overlayBuffer.length}`);
+
+      const overlayLayers = [{ input: overlayBuffer, left: 0, top: 0 }];
       
-      _debugLayers = overlayLayers.map((l, i) => ({ i, bytes: l.input.length, left: l.left, top: l.top }))
-      logInfo(ROUTE_NAME, `Overlay layers: ${overlayLayers.length} layers built`)
+      _debugLayers = [{ i: 0, bytes: overlayBuffer.length, left: 0, top: 0 }];
       
       // Composite: background + all overlay layers
       let composed = sharp(bgBuffer).composite(overlayLayers)
