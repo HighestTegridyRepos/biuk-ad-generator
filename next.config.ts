@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["sharp"],
+  serverExternalPackages: ["sharp", "@resvg/resvg-js"],
   outputFileTracingIncludes: {
     "/api/pipeline/create": ["./src/fonts/**/*", "./fonts/**/*"],
   },
