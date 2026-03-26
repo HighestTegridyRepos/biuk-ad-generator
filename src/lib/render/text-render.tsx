@@ -31,6 +31,8 @@ export async function renderOverlayPng(
 
   const overlayElement = buildAdOverlaySvg(width, height, headline, subhead, callouts, bannerColor, bannerText);
 
+  console.log(`[renderOverlayPng] Starting. Width: ${width}, Height: ${height}, Headline: "${headline}", Callouts: ${callouts.length}`)
+
   const svg = await satori(overlayElement, {
     width,
     height,
@@ -50,13 +52,19 @@ export async function renderOverlayPng(
     ],
   })
 
+  console.log(`[renderOverlayPng] SVG generated, length: ${svg.length} bytes`)
+
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width" as const, value: width },
     background: "rgba(0,0,0,0)",
   })
   
   const rendered = resvg.render()
-  return Buffer.from(rendered.asPng())
+  const pngBuffer = Buffer.from(rendered.asPng())
+  
+  console.log(`[renderOverlayPng] PNG rendered, size: ${pngBuffer.length} bytes`)
+  
+  return pngBuffer
 }
 
 // Keeping the old text renderer for now in case we need it, but it's unused.
