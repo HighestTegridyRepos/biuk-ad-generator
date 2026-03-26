@@ -55,6 +55,7 @@ interface PipelineRequest {
   bannerStyle?: "trustpilot" | "gold"
   socialProofText?: string
   accentColor?: string
+  productImageUrl?: string  // Direct product image URL — bypasses scraping
 }
 
 interface HeadlineVariation {
@@ -1522,6 +1523,7 @@ export async function POST(request: NextRequest) {
   const bannerStyle = body.bannerStyle || (layout === "before-after-quad" ? "trustpilot" : "gold")
   const socialProofText = body.socialProofText || "SUBSCRIBE & SAVE 20%"
   const accentColor = body.accentColor || "#4AADE0"
+  const productImageUrl = body.productImageUrl || null  // Direct product image URL — bypasses scraping
 
   if (layout !== "before-after-quad" && layout !== "checklist" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
     return NextResponse.json({ error: "A brief (string, min 10 chars) is required" }, { status: 400 })
@@ -1860,9 +1862,41 @@ export async function POST(request: NextRequest) {
     }
     logInfo(ROUTE_NAME, "Step 5 done")
 
-    // ── STEP 5.5: Scrape product image + background removal ────
+    // ── STEP 5.5: Get product image + background removal ────
     let productCutoutBase64: string | null = null
-    if (productUrl) {
+    
+    // Priority 1: Direct product image URL (bypasses scraping entirely)
+    if (productImageUrl) {
+      logInfo(ROUTE_NAME, `Step 5.5: Using direct product image URL: ${productImageUrl}`)
+      try {
+        const imgRes = await fetch(productImageUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+          signal: AbortSignal.timeout(15000),
+        })
+        if (imgRes.ok) {
+          const imgBuf = Buffer.from(await imgRes.arrayBuffer())
+          const alreadyTransparent = await checkExistingTransparency(imgBuf)
+          if (alreadyTransparent) {
+            productCutoutBase64 = alreadyTransparent.toString("base64")
+            logInfo(ROUTE_NAME, "Step 5.5: Direct image already has transparency")
+          } else {
+            const whiteBgCutout = await removeWhiteBackground(imgBuf)
+            if (whiteBgCutout) {
+              productCutoutBase64 = whiteBgCutout.toString("base64")
+              logInfo(ROUTE_NAME, "Step 5.5: Direct image white-bg removal succeeded")
+            } else {
+              productCutoutBase64 = imgBuf.toString("base64")
+              logInfo(ROUTE_NAME, "Step 5.5: Using direct image as-is")
+            }
+          }
+        }
+      } catch (e) {
+        logWarn(ROUTE_NAME, `Step 5.5: Failed to fetch direct product image: ${(e as Error).message}`)
+      }
+    }
+    
+    // Priority 2: Scrape from product URL
+    if (!productCutoutBase64 && productUrl) {
       logInfo(ROUTE_NAME, "Step 5.5: Scraping product image")
       try {
         const heroImageUrl = await scrapeProductHeroImage(productUrl)
