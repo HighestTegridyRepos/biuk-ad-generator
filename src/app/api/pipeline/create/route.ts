@@ -733,6 +733,7 @@ export async function POST(request: NextRequest) {
     // Use sharp for server-side composition (Vercel-compatible, no native deps)
     let finalImageDataUrl: string
     let useSimpleFallback = false
+    let _debugLayers: Array<{ i: number; bytes: number; left: number; top: number }> = []
 
     try {
       const sharpModule = await import("sharp")
@@ -755,6 +756,9 @@ export async function POST(request: NextRequest) {
         bannerColor,
         bannerText
       )
+      
+      _debugLayers = overlayLayers.map((l, i) => ({ i, bytes: l.input.length, left: l.left, top: l.top }))
+      logInfo(ROUTE_NAME, `Overlay layers: ${overlayLayers.length} layers built`)
       
       // Composite: background + all overlay layers
       let composed = sharp(bgBuffer).composite(overlayLayers)
@@ -814,6 +818,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ...response,
+      _debug: {
+        overlayLayerCount: typeof _debugLayers !== "undefined" ? _debugLayers.length : -1,
+        overlayLayers: typeof _debugLayers !== "undefined" ? _debugLayers : [],
+        compositionError: adLabelOverride,
+        useSimpleFallback,
+        productCutoutPresent: !!productCutoutBase64,
+        positionedCalloutCount: positionedCallouts.length,
+        dimensions: { width, height },
+      },
       productIntelligence: productIntel
         ? {
             name: productIntel.name,
