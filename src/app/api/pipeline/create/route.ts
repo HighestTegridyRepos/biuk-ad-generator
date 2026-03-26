@@ -1843,6 +1843,7 @@ export async function POST(request: NextRequest) {
     const textY = messageZone.y
     const maxTextW = messageZone.width
 
+    let adLabelOverride: string | null = null
     // Use sharp for server-side composition (Vercel-compatible, no native deps)
     let finalImageDataUrl: string
     let useSimpleFallback = false
@@ -1896,9 +1897,11 @@ export async function POST(request: NextRequest) {
       logInfo(ROUTE_NAME, "Step 6: Sharp composition succeeded")
     } catch (sharpErr) {
       const err = sharpErr as Error
-      logWarn(ROUTE_NAME, `Sharp composition failed: ${err.message}, using raw background`)
+      logWarn(ROUTE_NAME, `Sharp composition failed: ${err.message}`)
       useSimpleFallback = true
       finalImageDataUrl = generatedImageUrl
+      // TEMPORARY DEBUGGING: return the error in the label
+      adLabelOverride = `Error: ${err.message}`
     }
 
     logInfo(ROUTE_NAME, "Step 6 done")
@@ -1915,7 +1918,7 @@ export async function POST(request: NextRequest) {
       finalAds: [
         {
           imageDataUrl: finalImageDataUrl,
-          label: useSimpleFallback ? "Ad (raw image — compose client-side)" : "Ad",
+          label: adLabelOverride ?? (useSimpleFallback ? "Ad (raw image — compose client-side)" : "Ad"),
           headline: headlineOverride ?? selectedHeadline.headline,
           subhead: subheadOverride ?? selectedHeadline.subhead,
           cta: selectedHeadline.cta,
