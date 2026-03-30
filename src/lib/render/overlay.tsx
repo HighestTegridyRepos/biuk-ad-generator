@@ -20,7 +20,7 @@ export function buildAdOverlaySvg(
   // ── Sizes (scaled) ──
   const bannerH = Math.round(height * 0.09)          // ~97px at 1080
   const bannerTop = height - bannerH
-  const bannerFontSize = Math.round(38 * s)
+  const bannerFontSize = Math.round(44 * s)
 
   const headlineTop = Math.round(height * 0.03)
   const headlinePad = Math.round(30 * s)
@@ -34,9 +34,9 @@ export function buildAdOverlaySvg(
   // position.x/y = top-left assuming 190×76. Re-center for actual 240×90.
   const oldBubbleW = Math.round(190 * s)
   const oldBubbleH = Math.round(76 * s)
-  const bubbleW = Math.round(240 * s)
-  const bubbleH = Math.round(90 * s)
-  const bubbleFontSize = Math.round(30 * s)
+  const bubbleW = Math.round(280 * s)
+  const bubbleH = Math.round(100 * s)
+  const bubbleFontSize = Math.round(32 * s)
   // Offset to keep bubble centered on intended center point
   const bubbleOffsetX = Math.round((bubbleW - oldBubbleW) / 2)
   const bubbleOffsetY = Math.round((bubbleH - oldBubbleH) / 2)

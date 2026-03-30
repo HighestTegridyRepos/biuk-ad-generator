@@ -140,8 +140,8 @@ function autoPositionCallouts(
   const visibleProductHalfW = productBounds
     ? Math.round(productBounds.w * 0.35)  // ~35% of cutout width = visible bottle body
     : Math.round(width * 0.12)            // ~12% from center
-  const productLeftEdge = productCenterX - visibleProductHalfW
-  const productRightEdge = productCenterX + visibleProductHalfW
+  const productLeftEdge = productCenterX - visibleProductHalfW + Math.round(15 * s)
+  const productRightEdge = productCenterX + visibleProductHalfW - Math.round(15 * s)
   const productTop = productBounds ? productBounds.y : headlineZoneBottom + Math.round(20 * s)
   const productBottom = productBounds ? productBounds.y + productBounds.h : bannerTop - Math.round(50 * s)
   const productH = productBottom - productTop
@@ -583,17 +583,15 @@ export async function POST(request: NextRequest) {
         const tmpImgW = tmpMeta.width ?? 200
         const tmpImgH = tmpMeta.height ?? 200
         const productAspect = tmpImgH / tmpImgW
-        // Product max 50-55% canvas height, capped tighter for tall bottles
-        let targetHeightFrac = productAspect >= 3.0 ? 0.42 : productAspect >= 2.0 ? 0.50 : 0.55
+        // Product fills space between headline zone and banner minus padding
         const bannerTopY = height - Math.round(height * 0.09)
-        const minClearance = 50
         const headlineZoneBot = Math.round(height * 0.22)
-        const availH = bannerTopY - minClearance - headlineZoneBot
-        let tH = Math.round(height * targetHeightFrac)
-        if (tH > availH) tH = availH
+        const verticalPad = 40  // 20px top + 20px bottom clearance
+        const availH = bannerTopY - headlineZoneBot - verticalPad
+        let tH = availH  // fill available space
         const tW = Math.round(tmpImgW * (tH / tmpImgH))
         const px = Math.round((width - tW) / 2)
-        const py = headlineZoneBot + Math.round((bannerTopY - minClearance - headlineZoneBot - tH) / 2)
+        const py = headlineZoneBot + Math.round((availH - tH) / 2) + Math.round(verticalPad / 2)
         productBounds = { x: px, y: py, w: tW, h: tH }
       } catch(e) { 
         debugLogs.push(`Could not calculate product bounds: ${(e as Error).message}`)
