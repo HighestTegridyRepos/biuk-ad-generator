@@ -583,7 +583,8 @@ export async function POST(request: NextRequest) {
         const tmpImgW = tmpMeta.width ?? 200
         const tmpImgH = tmpMeta.height ?? 200
         const productAspect = tmpImgH / tmpImgW
-        let targetHeightFrac = productAspect >= 2.0 ? 0.50 : 0.60
+        // Product max 50-55% canvas height, capped tighter for tall bottles
+        let targetHeightFrac = productAspect >= 3.0 ? 0.42 : productAspect >= 2.0 ? 0.50 : 0.55
         const bannerTopY = height - Math.round(height * 0.09)
         const minClearance = 50
         const headlineZoneBot = Math.round(height * 0.22)
@@ -611,15 +612,8 @@ export async function POST(request: NextRequest) {
       const bgBuffer = await sharp(rawBgBuffer).resize(width, height, { fit: "cover" }).png().toBuffer()
       debugLogs.push(`Background buffer created, size: ${bgBuffer.length} bytes`)
 
-      const { buffer: overlayBuffer, logs: renderLogs } = await renderOverlayPng(
-        width, height,
-        ad.headline, ad.subhead,
-        positionedCallouts,
-        bannerColor, bannerText
-      );
-      debugLogs.push(...renderLogs)
-
-      let layers = [{ input: overlayBuffer, left: 0, top: 0 }];
+      // Product layer FIRST (behind overlay so connector lines + text render on top)
+      let layers: Array<{ input: Buffer; left: number; top: number }> = [];
 
       if (productImageUrl) {
         const productCutoutBuffer = await fetchBuffer(productImageUrl);
@@ -628,8 +622,24 @@ export async function POST(request: NextRequest) {
         const prodH = productBounds?.h ?? Math.round(height * 0.5)
         const prodX = productBounds?.x ?? Math.round((width - prodW) / 2)
         const prodY = productBounds?.y ?? Math.round((height - prodH) / 2)
-        layers.push({ input: productCutoutBuffer, left: prodX, top: prodY })
+        // Resize product cutout to target bounds — prevents oversized product
+        const resizedProduct = await sharp(productCutoutBuffer)
+          .resize(prodW, prodH, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .png()
+          .toBuffer()
+        debugLogs.push(`Product resized to ${prodW}×${prodH}, centered at (${prodX},${prodY})`)
+        layers.push({ input: resizedProduct, left: prodX, top: prodY })
       }
+
+      // Overlay layer SECOND (on top of product — text, bubbles, lines visible)
+      const { buffer: overlayBuffer, logs: renderLogs } = await renderOverlayPng(
+        width, height,
+        ad.headline, ad.subhead,
+        positionedCallouts,
+        bannerColor, bannerText
+      );
+      debugLogs.push(...renderLogs)
+      layers.push({ input: overlayBuffer, left: 0, top: 0 });
       
       const finalImageBuffer = await sharp(bgBuffer).composite(layers).png().toBuffer();
       debugLogs.push(`Composition complete, final size: ${finalImageBuffer.length} bytes`)
