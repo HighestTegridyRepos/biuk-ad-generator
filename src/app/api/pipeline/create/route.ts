@@ -236,6 +236,15 @@ async function scrapeProductHeroImage(productUrl: string): Promise<string | null
 }
 
 
+async function fetchBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) throw new Error(`fetchBuffer: HTTP ${res.status} for ${url}`)
+  return Buffer.from(await res.arrayBuffer())
+}
+
 export async function POST(request: NextRequest) {
   logInfo(ROUTE_NAME, "Pipeline request received")
 
@@ -352,6 +361,7 @@ export async function POST(request: NextRequest) {
       imagePromptText += ". Ultra photorealistic photograph. Shot on Canon EOS R5 with 35mm f/1.4 lens. Shallow depth of field. Natural dramatic lighting. 4K resolution, razor sharp textures. Professional commercial photography. No text, no logos, no watermarks, no borders, no artifacts, no empty spaces."
     }
     logInfo(ROUTE_NAME, "Step 2 done")
+    const imagePrompt = imagePromptText  // Alias for response
 
     // ── STEP 3: Generate image ────────────────────────────────────
     let imageBase64: string | null = null
@@ -443,6 +453,25 @@ export async function POST(request: NextRequest) {
       selectedHeadline = headlines[0]
     }
     logInfo(ROUTE_NAME, "Step 5 done")
+
+    // ── STEP 5.5 PREP: Build finalAds array from selected headline ──
+    const finalAds: Array<{
+      imageDataUrl: string
+      label: string
+      headline: string
+      subhead?: string | null
+      cta: string
+      callouts: Array<{ text: string; position: { x: number; y: number }; anchorPoint: { x: number; y: number } }>
+    }> = [
+      {
+        imageDataUrl: "",
+        label: "Ad",
+        headline: selectedHeadline.headline,
+        subhead: selectedHeadline.subhead ?? null,
+        cta: selectedHeadline.cta,
+        callouts: [],
+      },
+    ]
 
     // ── STEP 5.5: Get product image + background removal ────
     let productCutoutBase64: string | null = null
@@ -595,7 +624,11 @@ export async function POST(request: NextRequest) {
       if (productImageUrl) {
         const productCutoutBuffer = await fetchBuffer(productImageUrl);
         debugLogs.push(`Product cutout fetched, size: ${productCutoutBuffer.length} bytes`)
-        layers.push({ input: productCutoutBuffer, gravity: 'center' })
+        const prodW = productBounds?.w ?? Math.round(width * 0.5)
+        const prodH = productBounds?.h ?? Math.round(height * 0.5)
+        const prodX = productBounds?.x ?? Math.round((width - prodW) / 2)
+        const prodY = productBounds?.y ?? Math.round((height - prodH) / 2)
+        layers.push({ input: productCutoutBuffer, left: prodX, top: prodY })
       }
       
       const finalImageBuffer = await sharp(bgBuffer).composite(layers).png().toBuffer();
@@ -628,7 +661,7 @@ export async function POST(request: NextRequest) {
         logs: debugLogs,
         productBounds,
       },
-      productIntelligence
+      productIntelligence: productIntel
     });
 } catch (err: unknown) {
     console.error("Pipeline error:", err)
