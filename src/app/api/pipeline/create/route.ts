@@ -622,13 +622,21 @@ export async function POST(request: NextRequest) {
         const prodH = productBounds?.h ?? Math.round(height * 0.5)
         const prodX = productBounds?.x ?? Math.round((width - prodW) / 2)
         const prodY = productBounds?.y ?? Math.round((height - prodH) / 2)
-        // Resize product cutout to target bounds — prevents oversized product
+        // Resize product, trim transparent padding, then re-center on canvas
         const resizedProduct = await sharp(productCutoutBuffer)
           .resize(prodW, prodH, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
           .png()
           .toBuffer()
-        debugLogs.push(`Product resized to ${prodW}×${prodH}, centered at (${prodX},${prodY})`)
-        layers.push({ input: resizedProduct, left: prodX, top: prodY })
+        // Trim transparent edges so centering is based on visible pixels
+        const trimmed = await sharp(resizedProduct).trim().toBuffer()
+        const trimMeta = await sharp(trimmed).metadata()
+        const finalW = trimMeta.width ?? prodW
+        const finalH = trimMeta.height ?? prodH
+        // Dead center: canvasWidth/2 - productWidth/2
+        const centerX = Math.round((width - finalW) / 2)
+        const centerY = prodY + Math.round((prodH - finalH) / 2)
+        debugLogs.push(`Product resized to ${prodW}×${prodH}, trimmed to ${finalW}×${finalH}, placed at (${centerX},${centerY})`)
+        layers.push({ input: trimmed, left: centerX, top: centerY })
       }
 
       // Overlay layer SECOND (on top of product — text, bubbles, lines visible)

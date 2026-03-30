@@ -25,7 +25,7 @@ export function buildAdOverlaySvg(
   const headlineTop = Math.round(height * 0.03)
   const headlinePad = Math.round(30 * s)
   const headlineWidth = width - headlinePad * 2
-  const headlineFontSize = Math.round(85 * s)
+  const headlineFontSize = Math.round(96 * s)
   const subheadFontSize = Math.round(28 * s)
   // Headline backdrop: full width, auto height via padding
   const headlineBackdropPadV = Math.round(20 * s)
@@ -36,7 +36,7 @@ export function buildAdOverlaySvg(
   const oldBubbleH = Math.round(76 * s)
   const bubbleW = Math.round(240 * s)
   const bubbleH = Math.round(90 * s)
-  const bubbleFontSize = Math.round(26 * s)
+  const bubbleFontSize = Math.round(30 * s)
   // Offset to keep bubble centered on intended center point
   const bubbleOffsetX = Math.round((bubbleW - oldBubbleW) / 2)
   const bubbleOffsetY = Math.round((bubbleH - oldBubbleH) / 2)
