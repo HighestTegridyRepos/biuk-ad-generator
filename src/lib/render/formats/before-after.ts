@@ -28,7 +28,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
   const prodZoneY1 = Math.round(200 * s)
   const prodZoneY2 = Math.round(880 * s)
   const prodZoneH = prodZoneY2 - prodZoneY1
-  const prodMaxW = Math.round(width * 0.30)
+  const prodMaxW = Math.round(width * 0.38)
 
   // Badge: 230px circle at (875, 325)
   const badgeDiam = Math.round(230 * s)
@@ -82,7 +82,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
   const prodY = prodZoneY1 + Math.round((prodZoneH - prodH) / 2)
 
   // 3. Text overlay: top bar headline + badge + bottom banner
-  const headlineFontSize = Math.round(72 * s)
+  const headlineFontSize = Math.round(48 * s)
   const bannerFontSize = Math.round(45 * s)
   const badgeL1Size = Math.round(28 * s)
   const badgeL2Size = Math.round(56 * s)

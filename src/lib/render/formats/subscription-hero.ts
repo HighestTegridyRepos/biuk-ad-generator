@@ -70,15 +70,12 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
   const prodY = prodZoneY1 + Math.round((prodZoneH - prodH) / 2)
 
   // 3. Text overlay
-  const headlineFontSize = Math.round(88 * s)
   const subheadFontSize = Math.round(58 * s)
   const bannerFontSize = Math.round(45 * s)
   const starSize = Math.round(40 * s)
 
-  const words = headline.trim().split(/\s+/)
-  const mid = Math.ceil(words.length / 2)
-  const line1 = words.slice(0, mid).join(" ")
-  const line2 = words.slice(mid).join(" ") || line1
+  // Use \n for explicit line breaks, otherwise let satori wrap naturally
+  const hasExplicitBreaks = headline.includes("\n")
 
   const overlayEl = React.createElement(
     "div",
@@ -91,50 +88,64 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
         fontFamily: "Inter",
       },
     },
-    // Headline inside top bar — reduce font size to fit 200px bar
+    // Headline inside top bar — single text block, satori handles wrapping
     React.createElement(
       "div",
       {
         style: {
           position: "absolute",
-          top: Math.round(20 * s),
+          top: Math.round(15 * s),
           left: Math.round(45 * s),
+          width: Math.round(600 * s),
+          height: Math.round(170 * s),
           display: "flex",
-          flexDirection: "column",
-          maxWidth: Math.round(650 * s),
-          gap: Math.round(4 * s),
+          alignItems: "center",
         },
       },
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: Math.round(70 * s),
-            fontWeight: 700,
-            fontStyle: "italic" as const,
-            lineHeight: 0.95,
-            textTransform: "uppercase" as const,
-          },
-        },
-        line1
-      ),
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: Math.round(70 * s),
-            fontWeight: 700,
-            fontStyle: "italic" as const,
-            lineHeight: 0.95,
-            textTransform: "uppercase" as const,
-          },
-        },
-        line2
-      )
+      hasExplicitBreaks
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexDirection: "column" as const,
+                gap: Math.round(2 * s),
+              },
+            },
+            ...headline.split("\n").map((line: string, i: number) =>
+              React.createElement(
+                "div",
+                {
+                  key: i,
+                  style: {
+                    display: "flex",
+                    color: "#FFFFFF",
+                    fontSize: Math.round(68 * s),
+                    fontWeight: 700,
+                    fontStyle: "italic" as const,
+                    lineHeight: 1.0,
+                    textTransform: "uppercase" as const,
+                  },
+                },
+                line.trim()
+              )
+            )
+          )
+        : React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                color: "#FFFFFF",
+                fontSize: Math.round(56 * s),
+                fontWeight: 700,
+                fontStyle: "italic" as const,
+                lineHeight: 1.1,
+                textTransform: "uppercase" as const,
+              },
+            },
+            headline
+          )
     ),
     // Subheadline over photo
     subheadline ? React.createElement(

@@ -101,19 +101,24 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
         fontFamily: "Inter",
       },
     },
-    // Headline in cream header
+    // Header text block — single flex column so items flow without overlap
     React.createElement(
       "div",
       {
         style: {
           position: "absolute",
-          top: Math.round(30 * s),
+          top: Math.round(15 * s),
           left: Math.round(40 * s),
           right: Math.round(40 * s),
+          height: Math.round(260 * s),
           display: "flex",
+          flexDirection: "column" as const,
+          alignItems: "center",
           justifyContent: "center",
+          gap: Math.round(10 * s),
         },
       },
+      // Headline
       React.createElement(
         "div",
         {
@@ -124,27 +129,13 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
             fontWeight: 700,
             textTransform: "uppercase" as const,
             textAlign: "center" as const,
+            lineHeight: 1.05,
           },
         },
         headline
-      )
-    ),
-    // Accent text (bannerColor) — positioned to avoid overlap
-    accentLine1 ? React.createElement(
-      "div",
-      {
-        style: {
-          position: "absolute",
-          top: Math.round(120 * s),
-          left: Math.round(40 * s),
-          right: Math.round(40 * s),
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: Math.round(8 * s),
-        },
-      },
-      React.createElement(
+      ),
+      // Accent line 1
+      accentLine1 ? React.createElement(
         "div",
         {
           style: {
@@ -157,7 +148,8 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
           },
         },
         accentLine1
-      ),
+      ) : null,
+      // Accent line 2
       accentLine2 ? React.createElement(
         "div",
         {
@@ -171,22 +163,9 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
           },
         },
         accentLine2
-      ) : null
-    ) : null,
-    // Subheadline — moved down to clear accent text
-    subhead ? React.createElement(
-      "div",
-      {
-        style: {
-          position: "absolute",
-          top: Math.round(230 * s),
-          left: Math.round(40 * s),
-          right: Math.round(40 * s),
-          display: "flex",
-          justifyContent: "center",
-        },
-      },
-      React.createElement(
+      ) : null,
+      // Subheadline
+      subhead ? React.createElement(
         "div",
         {
           style: {
@@ -194,14 +173,13 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
             color: "#040404",
             fontSize: subheadFontSize,
             fontWeight: 700,
-            textTransform: "uppercase" as const,
             maxWidth: Math.round(800 * s),
             textAlign: "center" as const,
           },
         },
         subhead
-      )
-    ) : null,
+      ) : null
+    ),
     // Bottom banner
     React.createElement(
       "div",
