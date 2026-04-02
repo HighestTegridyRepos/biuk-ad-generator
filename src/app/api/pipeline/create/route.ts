@@ -17,6 +17,7 @@ import { logInfo, logWarn } from "@/lib/logger"
 import { renderOverlayPng } from "@/lib/render/text-render"
 import { renderBeforeAfterQuad } from "@/lib/render/before-after"
 import { renderChecklist } from "@/lib/render/checklist"
+import { getFormatRenderer, isValidFormat, type FormatName, type FormatConfig } from "@/lib/render/formats"
 import {
   checkExistingTransparency,
   removeWhiteBackground,
@@ -66,6 +67,14 @@ interface PipelineRequest {
   socialProofText?: string
   accentColor?: string
   productImageUrl?: string  // Direct product image URL — bypasses scraping
+  // ── Format system (6 new layout formats) ──
+  format?: string
+  problemPhotos?: string[]
+  beforePhoto?: string
+  afterPhoto?: string
+  backgroundPhoto?: string
+  accentText?: { line1: string; line2: string }
+  badgeText?: string
 }
 
 interface HeadlineVariation {
@@ -274,8 +283,10 @@ export async function POST(request: NextRequest) {
   const socialProofText = body.socialProofText || "SUBSCRIBE & SAVE 20%"
   const accentColor = body.accentColor || "#4AADE0"
   const productImageUrl = body.productImageUrl || null  // Direct product image URL — bypasses scraping
+  const format = (body.format && isValidFormat(body.format)) ? body.format as FormatName : null
 
-  if (layout !== "before-after-quad" && layout !== "checklist" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
+  // Format requests only need productImageUrl + headline + bannerColor (no brief required)
+  if (!format && layout !== "before-after-quad" && layout !== "checklist" && (!brief || typeof brief !== "string" || brief.trim().length < 10)) {
     return NextResponse.json({ error: "A brief (string, min 10 chars) is required" }, { status: 400 })
   }
 
@@ -300,6 +311,43 @@ export async function POST(request: NextRequest) {
     // ── CHECKLIST: separate pipeline path ───────────────────────────
     if (layout === "checklist") {
       return NextResponse.json({ error: "Layout 'checklist' is temporarily disabled." }, { status: 501 });
+    }
+
+    // ── FORMAT FAST PATH: skip Gemini if format + productImageUrl + headlineOverride ──
+    if (format && productImageUrl && headlineOverride) {
+      logInfo(ROUTE_NAME, `Format fast path: ${format}`)
+      const renderer = getFormatRenderer(format)
+      try {
+        const res = await fetch(productImageUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
+          signal: AbortSignal.timeout(15000),
+        })
+        if (!res.ok) throw new Error(`fetch ${res.status}`)
+        const productImageBuffer = Buffer.from(await res.arrayBuffer())
+        const formatConfig: FormatConfig = {
+          width, height, productImageBuffer,
+          headline: headlineOverride,
+          bannerColor, bannerText,
+          problemPhotos: body.problemPhotos,
+          beforePhoto: body.beforePhoto,
+          afterPhoto: body.afterPhoto,
+          backgroundPhoto: body.backgroundPhoto,
+          accentText: body.accentText,
+          subheadline: body.subheadOverride || undefined,
+          checklistItems: body.checklistItems,
+          badgeText: body.badgeText,
+        }
+        const finalBuffer = await renderer(formatConfig)
+        const imageDataUrl = `data:image/png;base64,${finalBuffer.toString("base64")}`
+        return NextResponse.json({
+          format, imageDataUrl, headline: headlineOverride, bannerColor,
+          finalAds: [{ imageDataUrl, label: format, headline: headlineOverride, subhead: null, cta: "SHOP NOW", callouts: [] }],
+          _debug: { format, rendered: true }
+        })
+      } catch (e: any) {
+        logWarn(ROUTE_NAME, `Format fast path failed: ${e.message}`)
+        return NextResponse.json({ error: `Format render failed: ${e.message}` }, { status: 500 })
+      }
     }
 
     // ── STEP 1: Generate concepts ─────────────────────────────────
@@ -566,7 +614,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    
+
     // ── STEP 6: Compose final ad ──────────────────────────────────
     logInfo(ROUTE_NAME, "Step 6: Composing ad")
 

@@ -1,0 +1,83 @@
+{
+  "formatName": "before-after",
+  "displayName": "Before/After Product Reveal",
+  "description": "Split background — dirty (left) vs clean (right). Product centered between halves. White header bar, colored CTA badge, colored bottom banner.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/before-after-kitchen.png",
+
+  "background": {
+    "type": "split-photo",
+    "leftPhoto": "before (problem/dirty scene)",
+    "rightPhoto": "after (clean/solved scene)",
+    "splitX": 540
+  },
+
+  "topBar": {
+    "height": 120,
+    "backgroundColor": "#FFFFFF",
+    "yStart": 0,
+    "yEnd": 120
+  },
+
+  "headline": {
+    "position": "top-center",
+    "yStart": 35,
+    "yEnd": 95,
+    "lines": 1,
+    "fontSize": 76,
+    "fontStyle": "bold-condensed-italic",
+    "color": "#000000",
+    "textAlign": "center",
+    "textShadow": false
+  },
+
+  "product": {
+    "zone": "center",
+    "xCenter": 540,
+    "yStart": 200,
+    "yEnd": 880,
+    "widthPercent": 0.30,
+    "heightPercent": 0.63,
+    "dropShadow": true
+  },
+
+  "ctaBadge": {
+    "shape": "circle",
+    "diameter": 230,
+    "x": 875,
+    "y": 325,
+    "backgroundColor": "{{bannerColor}}",
+    "borderColor": "#FFFFFF",
+    "borderWidth": 4,
+    "text": ["Subscribe & Save", "20%"],
+    "textColor": "#FFFFFF",
+    "line1FontSize": 28,
+    "line2FontSize": 56
+  },
+
+  "bottomBanner": {
+    "height": 100,
+    "yStart": 980,
+    "backgroundColor": "{{bannerColor}}",
+    "textColor": "#FFFFFF",
+    "text": "Trusted by Thousands of Happy Customers",
+    "fontSize": 45,
+    "fontStyle": "italic-serif",
+    "stars": false
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+
+  "margins": {
+    "side": 40,
+    "top": 25
+  },
+
+  "colorPalette": {
+    "headerBg": "#FFFFFF",
+    "headline": "#000000",
+    "accent": "{{bannerColor}}",
+    "bannerText": "#FFFFFF"
+  }
+}

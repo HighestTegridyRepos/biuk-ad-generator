@@ -1,0 +1,76 @@
+{
+  "formatName": "pain-split",
+  "displayName": "Pain Point Split",
+  "description": "Dark background, 2-column layout. Left: 2 problem photos stacked. Right: product hero. Emotional headline, gold/tan accent banner.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/pain-split-fabric.png",
+
+  "background": {
+    "type": "solid",
+    "color": "#1A1A1A"
+  },
+
+  "headline": {
+    "position": "top-center",
+    "yStart": 25,
+    "yEnd": 165,
+    "lines": 2,
+    "fontSize": 75,
+    "fontStyle": "bold-condensed",
+    "line1Color": "#F5E6C8",
+    "line2Color": "{{bannerColor}}",
+    "textAlign": "center",
+    "textShadow": false
+  },
+
+  "grid": {
+    "type": "2-column",
+    "leftWidth": 0.55,
+    "rightWidth": 0.45,
+    "splitX": 595
+  },
+
+  "leftColumn": {
+    "type": "stacked-photos",
+    "photoCount": 2,
+    "photo1": { "x": 25, "y": 185, "width": 545, "height": 370, "cornerRadius": 15 },
+    "photo2": { "x": 25, "y": 570, "width": 545, "height": 360, "cornerRadius": 15 },
+    "gap": 15
+  },
+
+  "product": {
+    "zone": "right",
+    "x": 595,
+    "yCenter": 540,
+    "widthPercent": 0.39,
+    "heightPercent": 0.60,
+    "overlapsPhotos": true,
+    "dropShadow": true
+  },
+
+  "bottomBanner": {
+    "height": 85,
+    "yStart": 995,
+    "backgroundColor": "{{bannerColor}}",
+    "textColor": "#000000",
+    "stars": { "count": 5, "color": "#000000", "size": 28, "position": "left", "x": 90 },
+    "ctaText": "SUBSCRIBE & SAVE 20%",
+    "ctaFontSize": 45,
+    "ctaX": 350
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+
+  "margins": {
+    "outer": 25,
+    "photoGap": 15
+  },
+
+  "colorPalette": {
+    "background": "#1A1A1A",
+    "headlinePrimary": "#F5E6C8",
+    "headlineAccent": "{{bannerColor}}",
+    "bannerText": "#000000"
+  }
+}

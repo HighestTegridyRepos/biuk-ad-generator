@@ -1,0 +1,78 @@
+{
+  "formatName": "pain-hero",
+  "displayName": "Pain Point Hero Shot",
+  "description": "Full problem-scene photo background. Bold 2-line headline top-left (line 1 white, line 2 accent color). Large product hero center-right. Colored bottom banner with stars + CTA. No top bar.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/pain-hero-patio.png",
+
+  "background": {
+    "type": "photo",
+    "description": "Full-bleed problem scene (e.g. grimy patio, dirty surface)",
+    "fillsCanvas": true
+  },
+
+  "topBar": false,
+
+  "headline": {
+    "position": "top-left",
+    "x": 40,
+    "yStart": 40,
+    "yEnd": 300,
+    "lines": 2,
+    "line1": {
+      "fontSize": 120,
+      "color": "#FFFFFF",
+      "fontStyle": "bold-condensed",
+      "textShadow": { "offset": 3, "color": "rgba(0,0,0,0.4)" }
+    },
+    "line2": {
+      "fontSize": 130,
+      "color": "{{bannerColor}}",
+      "fontStyle": "bold-condensed",
+      "textShadow": { "offset": 3, "color": "rgba(0,0,0,0.4)" }
+    },
+    "textAlign": "left",
+    "maxWidth": 1000
+  },
+
+  "product": {
+    "zone": "center-right",
+    "xStart": 480,
+    "xEnd": 980,
+    "yStart": 280,
+    "yEnd": 920,
+    "widthPercent": 0.46,
+    "heightPercent": 0.59,
+    "alignment": "center-right",
+    "angle": "slight 3/4 view"
+  },
+
+  "bottomBanner": {
+    "height": 100,
+    "yStart": 980,
+    "backgroundColor": "{{bannerColor}}",
+    "stars": { "count": 5, "color": "#FFFFFF", "size": 30, "position": "left", "x": 40 },
+    "ctaText": "Subscribe and Save 20%",
+    "ctaFontSize": 48,
+    "ctaX": 400,
+    "textColor": "#FFFFFF",
+    "fontStyle": "italic"
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+  "ctaBadge": false,
+
+  "margins": {
+    "left": 40,
+    "right": 40,
+    "top": 40
+  },
+
+  "colorPalette": {
+    "headlineWhite": "#FFFFFF",
+    "headlineAccent": "{{bannerColor}}",
+    "banner": "{{bannerColor}}",
+    "bannerText": "#FFFFFF"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "formatName": "subscription-hero",
+  "displayName": "Subscription Hero Shot",
+  "description": "Large colored top bar with bold headline. Problem-scene photo background. Product right-aligned hero. Subheadline over background. Colored bottom banner with stars + CTA.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/subscription-kitchen.png",
+
+  "background": {
+    "type": "photo",
+    "description": "Problem scene photo (e.g. greasy stovetop, dirty surface)",
+    "fillsZone": { "yStart": 200, "yEnd": 980 }
+  },
+
+  "topBar": {
+    "height": 200,
+    "yStart": 0,
+    "yEnd": 200,
+    "backgroundColor": "{{bannerColor}}"
+  },
+
+  "headline": {
+    "position": "top-left",
+    "x": 45,
+    "yStart": 35,
+    "yEnd": 190,
+    "lines": 2,
+    "fontSize": 88,
+    "fontStyle": "bold-italic",
+    "color": "#FFFFFF",
+    "textAlign": "left",
+    "textShadow": { "offset": 2, "color": "rgba(0,0,0,0.3)" },
+    "zone": "inside-top-bar"
+  },
+
+  "subheadline": {
+    "position": "left",
+    "x": 45,
+    "y": 280,
+    "lines": 1,
+    "fontSize": 58,
+    "fontStyle": "italic",
+    "color": "#FFFFFF",
+    "textShadow": { "offset": 3, "blur": 4, "color": "rgba(0,0,0,0.5)" }
+  },
+
+  "product": {
+    "zone": "right",
+    "xStart": 620,
+    "xEnd": 980,
+    "yStart": 280,
+    "yEnd": 920,
+    "widthPercent": 0.33,
+    "heightPercent": 0.60,
+    "alignment": "right"
+  },
+
+  "bottomBanner": {
+    "height": 100,
+    "yStart": 980,
+    "backgroundColor": "{{bannerColor}}",
+    "stars": { "count": 5, "color": "#FFFFFF", "size": 40, "position": "left", "x": 45 },
+    "ctaText": "Subscribe and Save 20%",
+    "ctaFontSize": 45,
+    "ctaX": 300,
+    "textColor": "#FFFFFF"
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+
+  "margins": {
+    "left": 45,
+    "right": 100,
+    "top": 35,
+    "bottom": 15
+  },
+
+  "grid": {
+    "type": "2-zone",
+    "leftTextZone": { "xStart": 0, "xEnd": 580, "widthPercent": 0.54 },
+    "rightProductZone": { "xStart": 580, "xEnd": 1080, "widthPercent": 0.46 }
+  },
+
+  "colorPalette": {
+    "topBar": "{{bannerColor}}",
+    "bottomBanner": "{{bannerColor}}",
+    "headlineText": "#FFFFFF",
+    "bannerText": "#FFFFFF"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "formatName": "before-after-extended",
+  "displayName": "Before/After with Extended Header",
+  "description": "Tall cream header (~290px) with black headline, green accent text, and black subhead. Split before(dirty)/after(clean) background. Product centered tall. Green bottom banner. No badge.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/before-after-patio.png",
+
+  "background": {
+    "type": "split-photo",
+    "leftPhoto": "before (dirty/problem scene)",
+    "rightPhoto": "after (clean/solved scene)",
+    "splitX": 350,
+    "note": "Product body overlaps the split zone; left is darker/grungier, right is lighter/cleaner"
+  },
+
+  "header": {
+    "height": 290,
+    "yStart": 0,
+    "yEnd": 290,
+    "backgroundColor": "#F5F0E6"
+  },
+
+  "headline": {
+    "position": "center",
+    "yStart": 30,
+    "yEnd": 100,
+    "lines": 1,
+    "fontSize": 70,
+    "fontStyle": "bold-condensed",
+    "color": "#020202",
+    "textAlign": "center"
+  },
+
+  "accentText": {
+    "position": "center-to-right",
+    "yStart": 140,
+    "yEnd": 205,
+    "lines": 2,
+    "fontSize": 55,
+    "fontStyle": "bold-condensed",
+    "color": "#2AA03E",
+    "textAlign": "center",
+    "note": "Green promotional text — e.g. price, key benefit"
+  },
+
+  "subheadline": {
+    "position": "left-center",
+    "yStart": 240,
+    "yEnd": 280,
+    "lines": 1,
+    "fontSize": 38,
+    "fontStyle": "bold",
+    "color": "#040404",
+    "textAlign": "left",
+    "x": 200
+  },
+
+  "product": {
+    "zone": "center",
+    "xCenter": 540,
+    "yStart": 380,
+    "yEnd": 870,
+    "widthPercent": 0.30,
+    "heightPercent": 0.45,
+    "bodyColor": "light/white container with dark label",
+    "dropShadow": false
+  },
+
+  "bottomBanner": {
+    "height": 85,
+    "yStart": 995,
+    "backgroundColor": "{{bannerColor}}",
+    "textColor": "#FFFFFF",
+    "stars": { "count": 5, "color": "#FFFFFF", "size": 30, "position": "left" },
+    "ctaText": "Subscribe and Save 20%",
+    "ctaFontSize": 42,
+    "fontStyle": "italic"
+  },
+
+  "transitionZone": {
+    "yStart": 870,
+    "yEnd": 995,
+    "type": "gradient-to-patio",
+    "note": "Below product, patio photo continues before banner"
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+  "ctaBadge": false,
+
+  "margins": {
+    "left": 40,
+    "right": 40,
+    "top": 20
+  },
+
+  "colorPalette": {
+    "headerBg": "#F5F0E6",
+    "headline": "#020202",
+    "accentText": "{{bannerColor}}",
+    "subheadline": "#040404",
+    "banner": "{{bannerColor}}",
+    "bannerText": "#FFFFFF"
+  }
+}

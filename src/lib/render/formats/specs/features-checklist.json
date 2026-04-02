@@ -1,0 +1,95 @@
+{
+  "formatName": "features-checklist",
+  "displayName": "Features Checklist",
+  "description": "Brand-colored top bar (~290px) with 2-line white headline. Problem scene photo background. Left-side vertical checklist with colored circle checkmarks. Product overlaid center-right. Dark bottom zone with brand badge/logo.",
+  "canvas": { "width": 1080, "height": 1080 },
+  "groundTruth": "ground-truth/features-checklist-mould.png",
+
+  "background": {
+    "type": "photo",
+    "description": "Problem scene photo (e.g. mouldy wall, dirty surface)",
+    "fillsCanvas": true
+  },
+
+  "topBar": {
+    "height": 290,
+    "yStart": 0,
+    "yEnd": 290,
+    "backgroundColor": "{{bannerColor}}"
+  },
+
+  "headline": {
+    "position": "center",
+    "zone": "inside-top-bar",
+    "lines": 2,
+    "line1": { "yCenter": 75, "fontSize": 72, "color": "#FFFFFF", "fontStyle": "bold-condensed" },
+    "line2": { "yCenter": 205, "fontSize": 72, "color": "#FFFFFF", "fontStyle": "bold-condensed" },
+    "gapBetweenLines": 40,
+    "textAlign": "center"
+  },
+
+  "checklist": {
+    "position": "left",
+    "xCircle": 50,
+    "xTextStart": 100,
+    "items": 4,
+    "itemSpacing": 108,
+    "firstItemY": 485,
+    "circle": {
+      "diameter": 52,
+      "fillColor": "{{bannerColor}}",
+      "icon": "checkmark",
+      "iconColor": "#FFFFFF"
+    },
+    "text": {
+      "fontSize": 26,
+      "color": "#FFFFFF",
+      "fontStyle": "bold",
+      "textShadow": { "offset": 2, "blur": 3, "color": "rgba(0,0,0,0.7)" },
+      "maxWidth": 350
+    },
+    "itemYPositions": [485, 593, 700, 808]
+  },
+
+  "product": {
+    "zone": "center-right",
+    "xCenter": 650,
+    "yStart": 400,
+    "yEnd": 870,
+    "widthPercent": 0.35,
+    "heightPercent": 0.44,
+    "overlapsBg": true
+  },
+
+  "bottomZone": {
+    "type": "dark-fade",
+    "yStart": 890,
+    "yEnd": 1080,
+    "backgroundColor": "#000000",
+    "opacity": 0.85,
+    "brandBadge": {
+      "present": true,
+      "color": "#21A56E",
+      "position": "bottom-left",
+      "x": 50,
+      "y": 1020
+    }
+  },
+
+  "connectorLines": false,
+  "calloutBubbles": false,
+
+  "margins": {
+    "left": 25,
+    "right": 25,
+    "top": 20
+  },
+
+  "colorPalette": {
+    "topBar": "{{bannerColor}}",
+    "headline": "#FFFFFF",
+    "checkCircle": "{{bannerColor}}",
+    "checkText": "#FFFFFF",
+    "bottomZone": "#000000"
+  }
+}
