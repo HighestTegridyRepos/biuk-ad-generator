@@ -540,8 +540,9 @@ export async function POST(request: NextRequest) {
               logInfo(ROUTE_NAME, "Step 5.5: White-bg failed, trying Gemini native bg removal")
               const nativeCutout = await removeBackgroundFromUrl(heroImageUrl)
               if (nativeCutout) {
-                productCutoutBase64 = nativeCutout
-                logInfo(ROUTE_NAME, "Step 5.5: Gemini native bg removal succeeded")
+                // Gemini outputs checkerboard pixels instead of alpha — clean them
+                productCutoutBase64 = await cleanCheckerboardArtifacts(nativeCutout)
+                logInfo(ROUTE_NAME, "Step 5.5: Gemini native bg removal succeeded + checkerboard cleaned")
               } else {
                 // Last resort: green-screen method
                 logInfo(ROUTE_NAME, "Step 5.5: Native failed, trying green-screen fallback")
@@ -614,8 +615,11 @@ export async function POST(request: NextRequest) {
       let layers: Array<{ input: Buffer; left: number; top: number }> = [];
 
       if (productImageUrl) {
-        const productCutoutBuffer = await fetchBuffer(productImageUrl);
-        debugLogs.push(`Product cutout fetched, size: ${productCutoutBuffer.length} bytes`)
+        let productCutoutBuffer = await fetchBuffer(productImageUrl);
+        // Safety net: clean checkerboard artifacts before compositing (catches any source)
+        const cleanedB64 = await cleanCheckerboardArtifacts(productCutoutBuffer.toString("base64"))
+        productCutoutBuffer = Buffer.from(cleanedB64, "base64")
+        debugLogs.push(`Product cutout fetched + checkerboard cleaned, size: ${productCutoutBuffer.length} bytes`)
         const prodW = productBounds?.w ?? Math.round(width * 0.5)
         const prodH = productBounds?.h ?? Math.round(height * 0.5)
         const prodX = productBounds?.x ?? Math.round((width - prodW) / 2)
