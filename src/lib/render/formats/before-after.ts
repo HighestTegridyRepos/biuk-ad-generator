@@ -11,7 +11,7 @@ import { FormatConfig, FormatRenderer, fetchBuf, renderToPng } from "./satori-he
 
 export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Promise<Buffer> => {
   const {
-    width, height, productImageBuffer, headline, bannerColor,
+    width, height, productImageBuffer, headline, bannerColor, bannerText,
     beforePhoto, afterPhoto, badgeText,
   } = cfg
   const s = width / 1080
@@ -207,7 +207,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
             fontStyle: "italic" as const,
           },
         },
-        "Trusted by Thousands of Happy Customers"
+        bannerText || "Subscribe and Save 20%"
       )
     )
   )

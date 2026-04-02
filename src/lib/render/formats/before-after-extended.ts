@@ -129,18 +129,19 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
         headline
       )
     ),
-    // Accent text (bannerColor)
+    // Accent text (bannerColor) — positioned to avoid overlap
     accentLine1 ? React.createElement(
       "div",
       {
         style: {
           position: "absolute",
-          top: Math.round(140 * s),
+          top: Math.round(120 * s),
           left: Math.round(40 * s),
           right: Math.round(40 * s),
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
+          gap: Math.round(8 * s),
         },
       },
       React.createElement(
@@ -152,7 +153,7 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
             fontSize: accentFontSize,
             fontWeight: 700,
             textTransform: "uppercase" as const,
-            lineHeight: 1.1,
+            lineHeight: 1.0,
           },
         },
         accentLine1
@@ -166,21 +167,23 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
             fontSize: accentFontSize,
             fontWeight: 700,
             textTransform: "uppercase" as const,
-            lineHeight: 1.1,
+            lineHeight: 1.0,
           },
         },
         accentLine2
       ) : null
     ) : null,
-    // Subheadline
+    // Subheadline — moved down to clear accent text
     subhead ? React.createElement(
       "div",
       {
         style: {
           position: "absolute",
-          top: Math.round(240 * s),
-          left: Math.round(200 * s),
+          top: Math.round(230 * s),
+          left: Math.round(40 * s),
+          right: Math.round(40 * s),
           display: "flex",
+          justifyContent: "center",
         },
       },
       React.createElement(
@@ -192,6 +195,8 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
             fontSize: subheadFontSize,
             fontWeight: 700,
             textTransform: "uppercase" as const,
+            maxWidth: Math.round(800 * s),
+            textAlign: "center" as const,
           },
         },
         subhead

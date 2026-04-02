@@ -91,17 +91,18 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
         fontFamily: "Inter",
       },
     },
-    // Headline inside top bar
+    // Headline inside top bar — reduce font size to fit 200px bar
     React.createElement(
       "div",
       {
         style: {
           position: "absolute",
-          top: Math.round(35 * s),
+          top: Math.round(20 * s),
           left: Math.round(45 * s),
           display: "flex",
           flexDirection: "column",
-          maxWidth: Math.round(600 * s),
+          maxWidth: Math.round(650 * s),
+          gap: Math.round(4 * s),
         },
       },
       React.createElement(
@@ -110,10 +111,10 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
           style: {
             display: "flex",
             color: "#FFFFFF",
-            fontSize: headlineFontSize,
+            fontSize: Math.round(70 * s),
             fontWeight: 700,
             fontStyle: "italic" as const,
-            lineHeight: 1.05,
+            lineHeight: 0.95,
             textTransform: "uppercase" as const,
           },
         },
@@ -125,10 +126,10 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
           style: {
             display: "flex",
             color: "#FFFFFF",
-            fontSize: headlineFontSize,
+            fontSize: Math.round(70 * s),
             fontWeight: 700,
             fontStyle: "italic" as const,
-            lineHeight: 1.05,
+            lineHeight: 0.95,
             textTransform: "uppercase" as const,
           },
         },
