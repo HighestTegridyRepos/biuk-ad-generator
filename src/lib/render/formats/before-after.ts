@@ -134,50 +134,48 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
         headline
       )
     ),
-    // Badge (SVG circle with text)
+    // Badge (div-based circle — satori doesn't support SVG <text>)
     React.createElement(
-      "svg",
+      "div",
       {
-        width: badgeDiam + Math.round(10 * s),
-        height: badgeDiam + Math.round(10 * s),
-        viewBox: `0 0 ${badgeDiam + Math.round(10 * s)} ${badgeDiam + Math.round(10 * s)}`,
         style: {
           position: "absolute",
-          left: badgeX - badgeR,
-          top: badgeY - badgeR,
+          left: badgeX - badgeR - Math.round(5 * s),
+          top: badgeY - badgeR - Math.round(5 * s),
+          width: badgeDiam + Math.round(10 * s),
+          height: badgeDiam + Math.round(10 * s),
+          borderRadius: Math.round((badgeDiam + Math.round(10 * s)) / 2),
+          backgroundColor: bannerColor,
+          border: `${Math.round(4 * s)}px solid #FFFFFF`,
+          display: "flex",
+          flexDirection: "column" as const,
+          alignItems: "center",
+          justifyContent: "center",
         },
       },
-      React.createElement("circle", {
-        cx: badgeR + Math.round(5 * s),
-        cy: badgeR + Math.round(5 * s),
-        r: badgeR,
-        fill: bannerColor,
-        stroke: "#FFFFFF",
-        strokeWidth: Math.round(4 * s),
-      }),
       React.createElement(
-        "text",
+        "div",
         {
-          x: badgeR + Math.round(5 * s),
-          y: badgeR - Math.round(8 * s),
-          textAnchor: "middle",
-          fill: "#FFFFFF",
-          fontSize: badgeL1Size,
-          fontWeight: "bold",
-          fontFamily: "Inter, sans-serif",
+          style: {
+            display: "flex",
+            color: "#FFFFFF",
+            fontSize: badgeL1Size,
+            fontWeight: 700,
+            fontFamily: "Inter",
+          },
         },
         badgeLine1
       ),
       React.createElement(
-        "text",
+        "div",
         {
-          x: badgeR + Math.round(5 * s),
-          y: badgeR + Math.round(40 * s),
-          textAnchor: "middle",
-          fill: "#FFFFFF",
-          fontSize: badgeL2Size,
-          fontWeight: "bold",
-          fontFamily: "Inter, sans-serif",
+          style: {
+            display: "flex",
+            color: "#FFFFFF",
+            fontSize: badgeL2Size,
+            fontWeight: 700,
+            fontFamily: "Inter",
+          },
         },
         badgeLine2
       )
