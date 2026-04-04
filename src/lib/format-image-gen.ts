@@ -182,7 +182,16 @@ export async function generateFormatImages(
         
         // Step 2: Feed the dirty image BACK to Gemini and ask for clean version
         logInfo(MODULE, "Generating AFTER (clean) scene from reference image...")
-        const afterPrompt = `This is a photo of a dirty, grimy surface. Generate the EXACT SAME photo — same camera angle, same lighting, same surface material, same composition — but now the surface is PERFECTLY CLEAN. Spotless, restored, gleaming like new. The transformation should be dramatic and obvious. Keep everything identical except remove all dirt, grime, stains, mould, and discoloration. ${PHOTO_SPEC}`
+        const afterPrompt = `IMPORTANT: Edit this EXACT image. Do NOT create a new scene. Keep the EXACT same:
+- Camera angle and perspective
+- Room/location/architecture
+- Wall material, floor material, window frames
+- Lighting direction and color temperature
+- All objects and furniture positions
+
+The ONLY change: remove ALL dirt, mould, grime, stains, algae, discoloration, and buildup. Make every surface spotlessly clean, restored to its original color. Grout should be white, surfaces should gleam, no trace of any contamination remains.
+
+The result should look like a professional before/after comparison where the viewer can tell it is unmistakably the same location.`
         const afterBuf = await generateImageFromReference(beforeBuf, afterPrompt, model)
         if (afterBuf) {
           result.afterPhoto = afterBuf
