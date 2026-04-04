@@ -11,7 +11,7 @@ import { FormatConfig, FormatRenderer, fetchBuf, renderToPng } from "./satori-he
 
 export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig): Promise<Buffer> => {
   const {
-    width, height, productImageBuffer, headline, bannerColor,
+    width, height, productImageBuffer, headline, bannerColor, bannerText,
     backgroundPhoto, subheadline,
   } = cfg
   const s = width / 1080
@@ -26,7 +26,7 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
   // Product zone: right side x:620–980, y:280–920
   const prodZoneX1 = Math.round(620 * s)
   const prodZoneX2 = Math.round(980 * s)
-  const prodZoneY1 = Math.round(280 * s)
+  const prodZoneY1 = Math.round(220 * s)
   const prodZoneY2 = Math.round(920 * s)
   const prodZoneW = prodZoneX2 - prodZoneX1
   const prodZoneH = prodZoneY2 - prodZoneY1
@@ -214,7 +214,7 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
             fontWeight: 700,
           },
         },
-        "Subscribe and Save 20%"
+        bannerText || "Subscribe and Save 20%"
       )
     )
   )

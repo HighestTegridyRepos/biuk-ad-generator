@@ -9,7 +9,7 @@ import React from "react"
 import { FormatConfig, FormatRenderer, fetchBuf, renderToPng } from "./satori-helpers"
 
 export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise<Buffer> => {
-  const { width, height, productImageBuffer, headline, bannerColor, backgroundPhoto } = cfg
+  const { width, height, productImageBuffer, headline, bannerColor, bannerText, backgroundPhoto } = cfg
   const s = width / 1080
 
   const { default: sharp } = await import("sharp")
@@ -19,7 +19,7 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
   const bannerY = height - bannerH
   const productZoneX1 = Math.round(480 * s)
   const productZoneX2 = Math.round(980 * s)
-  const productZoneY1 = Math.round(280 * s)
+  const productZoneY1 = Math.round(200 * s)
   const productZoneY2 = Math.round(920 * s)
   const productZoneW = productZoneX2 - productZoneX1
   const productZoneH = productZoneY2 - productZoneY1
@@ -56,14 +56,24 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
   const prodX = productZoneX1 + Math.round((productZoneW - prodW) / 2)
   const prodY = productZoneY1 + Math.round((productZoneH - prodH) / 2)
 
-  // 3. Headline: split on word boundary
-  const words = headline.trim().split(/\s+/)
-  const mid = Math.ceil(words.length / 2)
-  const line1 = words.slice(0, mid).join(" ")
-  const line2 = words.slice(mid).join(" ") || line1
+  // 3. Headline: split on \n if present, otherwise split at midpoint
+  let line1: string, line2: string
+  if (headline.includes("\n")) {
+    const parts = headline.split("\n")
+    line1 = parts[0].trim()
+    line2 = parts.slice(1).join(" ").trim()
+  } else {
+    const words = headline.trim().split(/\s+/)
+    const mid = Math.ceil(words.length / 2)
+    line1 = words.slice(0, mid).join(" ")
+    line2 = words.slice(mid).join(" ") || line1
+  }
 
-  const line1Size = Math.round(120 * s)
-  const line2Size = Math.round(130 * s)
+  // Auto-scale: if either line is long, reduce font sizes to prevent wrapping
+  const maxLineLen = Math.max(line1.length, line2.length)
+  const sizeFactor = maxLineLen > 15 ? Math.max(0.6, 15 / maxLineLen) : 1.0
+  const line1Size = Math.round(120 * s * sizeFactor)
+  const line2Size = Math.round(130 * s * sizeFactor)
   const bannerFontSize = Math.round(48 * s)
   const bannerStarSize = Math.round(30 * s)
 
@@ -165,7 +175,7 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
             fontStyle: "italic" as const,
           },
         },
-        "Subscribe and Save 20%"
+        bannerText || "Subscribe and Save 20%"
       )
     )
   )

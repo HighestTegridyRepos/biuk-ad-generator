@@ -19,7 +19,7 @@ function hexToRgb(hex: string): [number, number, number] {
 
 export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig): Promise<Buffer> => {
   const {
-    width, height, productImageBuffer, headline, bannerColor,
+    width, height, productImageBuffer, headline, bannerColor, bannerText,
     backgroundPhoto, checklistItems,
   } = cfg
   const s = width / 1080
@@ -250,7 +250,7 @@ export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig)
         {
           style: {
             display: "flex",
-            color: "#21A56E",
+            color: "#FFFFFF",
             fontSize: starSize,
             fontWeight: 700,
           },
@@ -267,7 +267,7 @@ export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig)
             fontWeight: 700,
           },
         },
-        "Subscribe and Save 20%"
+        bannerText || "Subscribe and Save 20%"
       )
     )
   )
