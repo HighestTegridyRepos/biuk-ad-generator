@@ -66,6 +66,12 @@ export type FormatRenderer = (config: FormatConfig) => Promise<Buffer>
 
 /** Fetch a URL to a Buffer */
 export async function fetchBuf(url: string): Promise<Buffer> {
+  // Handle data: URLs directly (from AI-generated images)
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:[^;]+;base64,(.+)$/)
+    if (match) return Buffer.from(match[1], "base64")
+    throw new Error("Invalid data URL format")
+  }
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
     signal: AbortSignal.timeout(15000),

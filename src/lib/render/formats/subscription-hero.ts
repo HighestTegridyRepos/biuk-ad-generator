@@ -24,9 +24,10 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
   const bannerY = height - bannerH
 
   // Product zone: right side x:620–980, y:280–920
-  const prodZoneX1 = Math.round(600 * s)
-  const prodZoneX2 = Math.round(1000 * s)
-  const prodZoneY1 = Math.round(100 * s)
+  // Product zone: right side, 35%W × 85%H per ground truth
+  const prodZoneX1 = Math.round(540 * s)
+  const prodZoneX2 = Math.round(1040 * s)
+  const prodZoneY1 = Math.round(50 * s)
   const prodZoneY2 = Math.round(980 * s)
   const prodZoneW = prodZoneX2 - prodZoneX1
   const prodZoneH = prodZoneY2 - prodZoneY1

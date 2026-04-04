@@ -18,6 +18,7 @@ import { renderOverlayPng } from "@/lib/render/text-render"
 import { renderBeforeAfterQuad } from "@/lib/render/before-after"
 import { renderChecklist } from "@/lib/render/checklist"
 import { getFormatRenderer, isValidFormat, type FormatName, type FormatConfig } from "@/lib/render/formats"
+import { generateFormatImages } from "@/lib/format-image-gen"
 import {
   checkExistingTransparency,
   removeWhiteBackground,
@@ -315,23 +316,44 @@ export async function POST(request: NextRequest) {
 
     // ── FORMAT FAST PATH: skip Gemini if format + productImageUrl + headlineOverride ──
     if (format && productImageUrl && headlineOverride) {
-      logInfo(ROUTE_NAME, `Format fast path: ${format}`)
+      logInfo(ROUTE_NAME, `Format path: ${format}`)
       const renderer = getFormatRenderer(format)
       try {
+        // Fetch product image
         const res = await fetch(productImageUrl, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
           signal: AbortSignal.timeout(15000),
         })
         if (!res.ok) throw new Error(`fetch ${res.status}`)
         const productImageBuffer = Buffer.from(await res.arrayBuffer())
+
+        // Generate background images if not provided
+        const bufToDataUrl = (buf: Buffer) => `data:image/png;base64,${buf.toString("base64")}`
+        let bgPhoto = body.backgroundPhoto
+        let beforePh = body.beforePhoto
+        let afterPh = body.afterPhoto
+        let problemPh = body.problemPhotos
+
+        const needsBg = !bgPhoto && !beforePh && !afterPh && (!problemPh || problemPh.length === 0)
+        if (needsBg) {
+          logInfo(ROUTE_NAME, `Generating AI background images for format: ${format}`)
+          const genImages = await generateFormatImages(format, headlineOverride, body.imageModel as string | undefined)
+          if (genImages.backgroundPhoto) bgPhoto = bufToDataUrl(genImages.backgroundPhoto)
+          if (genImages.beforePhoto) beforePh = bufToDataUrl(genImages.beforePhoto)
+          if (genImages.afterPhoto) afterPh = bufToDataUrl(genImages.afterPhoto)
+          if (genImages.problemPhotos && genImages.problemPhotos.length > 0) {
+            problemPh = genImages.problemPhotos.map(bufToDataUrl)
+          }
+        }
+
         const formatConfig: FormatConfig = {
           width, height, productImageBuffer,
           headline: headlineOverride,
           bannerColor, bannerText,
-          problemPhotos: body.problemPhotos,
-          beforePhoto: body.beforePhoto,
-          afterPhoto: body.afterPhoto,
-          backgroundPhoto: body.backgroundPhoto,
+          problemPhotos: problemPh,
+          beforePhoto: beforePh,
+          afterPhoto: afterPh,
+          backgroundPhoto: bgPhoto,
           accentText: body.accentText,
           subheadline: body.subheadOverride || undefined,
           checklistItems: body.checklistItems,
@@ -342,10 +364,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           format, imageDataUrl, headline: headlineOverride, bannerColor,
           finalAds: [{ imageDataUrl, label: format, headline: headlineOverride, subhead: null, cta: "SHOP NOW", callouts: [] }],
-          _debug: { format, rendered: true }
+          _debug: { format, rendered: true, aiBackgroundGenerated: needsBg }
         })
       } catch (e: any) {
-        logWarn(ROUTE_NAME, `Format fast path failed: ${e.message}`)
+        logWarn(ROUTE_NAME, `Format path failed: ${e.message}`)
         return NextResponse.json({ error: `Format render failed: ${e.message}` }, { status: 500 })
       }
     }
