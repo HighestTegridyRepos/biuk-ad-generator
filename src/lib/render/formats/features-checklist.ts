@@ -164,6 +164,7 @@ export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig)
             color: "#FFFFFF",
             fontSize: checkFontSize,
             fontWeight: 700,
+            fontStyle: "italic" as const,
             textShadow: `${Math.round(2 * s)}px ${Math.round(2 * s)}px ${Math.round(4 * s)}px rgba(0,0,0,0.8)`,
             flexWrap: "wrap" as const,
             maxWidth: Math.round(340 * s),
@@ -245,12 +246,10 @@ export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig)
           gap: Math.round(12 * s),
         },
       },
-      ...(bannerText
-        ? [React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(28 * s), fontWeight: 700 } }, bannerText)]
-        : [
-            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: starSize, fontWeight: 700 } }, "★★★★★"),
-            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bottomFontSize, fontWeight: 700 } }, "Subscribe and Save 20%")
-          ]
+      // Trustpilot-style green stars + white CTA text
+      React.createElement("div", { style: { display: "flex", color: "#00B67A", fontSize: starSize, fontWeight: 700 } }, "★★★★★"),
+      React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(28 * s), fontWeight: 700 } },
+        bannerText || "Subscribe and Save 20%"
       )
     )
   )

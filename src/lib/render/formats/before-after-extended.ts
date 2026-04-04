@@ -198,12 +198,8 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
           gap: Math.round(20 * s),
         },
       },
-      ...(bannerText
-        ? [React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(34 * s), fontWeight: 700, fontStyle: "italic" as const } }, bannerText)]
-        : [
-            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: starSize, fontWeight: 700 } }, "★★★★★"),
-            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bannerFontSize, fontWeight: 700, fontStyle: "italic" as const } }, "Subscribe and Save 20%")
-          ]
+      React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(38 * s), fontWeight: 700, fontStyle: "italic" as const } },
+        bannerText || "Trusted by Thousands of Happy Customers"
       )
     )
   )

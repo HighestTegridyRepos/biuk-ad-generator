@@ -17,10 +17,11 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
   // Layout
   const bannerH = Math.round(100 * s)
   const bannerY = height - bannerH
-  const productZoneX1 = Math.round(480 * s)
+  // Product zone: center-right, ~48%W × 60%H per ground truth
+  const productZoneX1 = Math.round(400 * s)
   const productZoneX2 = Math.round(980 * s)
-  const productZoneY1 = Math.round(200 * s)
-  const productZoneY2 = Math.round(920 * s)
+  const productZoneY1 = Math.round(180 * s)
+  const productZoneY2 = Math.round(940 * s)
   const productZoneW = productZoneX2 - productZoneX1
   const productZoneH = productZoneY2 - productZoneY1
 
@@ -70,9 +71,9 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
   }
 
   // Auto-scale: if either line is long, reduce font sizes to prevent wrapping
-  // Scale down aggressively if lines are long to prevent wrapping within a single line element
-  // At 120px Inter-Bold, ~8-9 chars fit in 980px maxWidth. Scale so longest line fits in one visual line.
-  const charsPerLine = 12 // conservative estimate for bold uppercase at base size
+  // Scale down if lines are long to prevent wrapping within a single line element
+  // At 120px Inter-Bold uppercase, ~14 chars fit in 940px maxWidth (account for left margin)
+  const charsPerLine = 14
   const maxLineLen = Math.max(line1.length, line2.length)
   const sizeFactor = maxLineLen > charsPerLine ? Math.max(0.5, charsPerLine / maxLineLen) : 1.0
   const line1Size = Math.round(120 * s * sizeFactor)

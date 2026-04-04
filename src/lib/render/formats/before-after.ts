@@ -25,10 +25,10 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
   const splitX = Math.round(540 * s)
 
   // Product zone: center, y 200–880
-  const prodZoneY1 = Math.round(200 * s)
-  const prodZoneY2 = Math.round(880 * s)
+  const prodZoneY1 = Math.round(160 * s)
+  const prodZoneY2 = Math.round(900 * s)
   const prodZoneH = prodZoneY2 - prodZoneY1
-  const prodMaxW = Math.round(width * 0.38)
+  const prodMaxW = Math.round(width * 0.30)
 
   // Badge: 230px circle at (875, 325)
   const badgeDiam = Math.round(230 * s)
@@ -113,7 +113,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
           left: 0,
           width,
           height: topBarH,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: "#000000",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -124,7 +124,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
         {
           style: {
             display: "flex",
-            color: "#000000",
+            color: "#FFFFFF",
             fontSize: headlineFontSize,
             fontWeight: 700,
             fontStyle: "italic" as const,
@@ -190,7 +190,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
           left: 0,
           width,
           height: bannerH,
-          backgroundColor: bannerColor,
+          backgroundColor: "#000000",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -207,7 +207,7 @@ export const renderBeforeAfter: FormatRenderer = async (cfg: FormatConfig): Prom
             fontStyle: "italic" as const,
           },
         },
-        bannerText || "Subscribe and Save 20%"
+        bannerText || "Trusted by Thousands of Happy Customers"
       )
     )
   )
