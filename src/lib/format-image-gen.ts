@@ -129,16 +129,22 @@ export interface FormatImageResult {
  * @param format - The ad format name
  * @param headline - Used for scene derivation if no productCategory
  * @param imageModel - Gemini model to use
- * @param productCategory - Product category key for Scene DNA lookup (e.g., "mould-remover", "kitchen-degreaser")
+ * @param productCategory - Product category key for Scene DNA lookup
+ * @param problemDescription - What the product solves (from product intelligence)
  */
 export async function generateFormatImages(
   format: string,
   headline: string,
   imageModel?: string,
   productCategory?: string,
+  problemDescription?: string,
 ): Promise<FormatImageResult> {
   const model = imageModel || "gemini-3-pro-image-preview"
-  const scene = buildScene(headline, productCategory)
+  let scene = buildScene(headline, productCategory)
+  // Enrich scene with product intelligence if available
+  if (problemDescription) {
+    scene = `${scene}. This scene specifically shows: ${problemDescription}`
+  }
   const result: FormatImageResult = {}
 
   logInfo(MODULE, `Generating images for format: ${format}, category: ${productCategory || "none"}, scene: "${scene.slice(0, 80)}..."`)

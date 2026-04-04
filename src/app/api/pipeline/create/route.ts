@@ -328,6 +328,21 @@ export async function POST(request: NextRequest) {
         if (!res.ok) throw new Error(`fetch ${res.status}`)
         const productImageBuffer = Buffer.from(await res.arrayBuffer())
 
+        // Product intelligence: auto-detect category from product URL if available
+        let productCategory = body.productCategory || undefined
+        let problemDescription: string | undefined
+        if (!productCategory && productUrl) {
+          try {
+            logInfo(ROUTE_NAME, "Format path: running product intelligence...")
+            const intel = await analyzeProduct(productUrl, generateText, extractJSON)
+            productCategory = intel.category
+            problemDescription = intel.problemItSolves
+            logInfo(ROUTE_NAME, `Product intelligence: ${intel.name} → ${intel.category} — ${intel.problemItSolves}`)
+          } catch (err) {
+            logWarn(ROUTE_NAME, `Product intelligence failed: ${(err as Error).message}`)
+          }
+        }
+
         // Generate background images if not provided
         const bufToDataUrl = (buf: Buffer) => `data:image/png;base64,${buf.toString("base64")}`
         let bgPhoto = body.backgroundPhoto
@@ -337,8 +352,8 @@ export async function POST(request: NextRequest) {
 
         const needsBg = !bgPhoto && !beforePh && !afterPh && (!problemPh || problemPh.length === 0)
         if (needsBg) {
-          logInfo(ROUTE_NAME, `Generating AI background images for format: ${format}`)
-          const genImages = await generateFormatImages(format, headlineOverride, body.imageModel as string | undefined, body.productCategory || undefined)
+          logInfo(ROUTE_NAME, `Generating AI background images for format: ${format}, category: ${productCategory || "auto-detect"}`)
+          const genImages = await generateFormatImages(format, headlineOverride, body.imageModel as string | undefined, productCategory, problemDescription)
           if (genImages.backgroundPhoto) bgPhoto = bufToDataUrl(genImages.backgroundPhoto)
           if (genImages.beforePhoto) beforePh = bufToDataUrl(genImages.beforePhoto)
           if (genImages.afterPhoto) afterPh = bufToDataUrl(genImages.afterPhoto)
@@ -365,7 +380,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           format, imageDataUrl, headline: headlineOverride, bannerColor,
           finalAds: [{ imageDataUrl, label: format, headline: headlineOverride, subhead: null, cta: "SHOP NOW", callouts: [] }],
-          _debug: { format, rendered: true, aiBackgroundGenerated: needsBg }
+          _debug: { format, rendered: true, aiBackgroundGenerated: needsBg, productCategory: productCategory || null }
         })
       } catch (e: any) {
         logWarn(ROUTE_NAME, `Format path failed: ${e.message}`)
