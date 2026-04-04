@@ -10,7 +10,7 @@ import { FormatConfig, FormatRenderer, fetchBuf, renderToPng } from "./satori-he
 
 export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfig): Promise<Buffer> => {
   const {
-    width, height, productImageBuffer, headline, bannerColor,
+    width, height, productImageBuffer, headline, bannerColor, bannerText,
     beforePhoto, afterPhoto, accentText, subheadline,
   } = cfg
   const s = width / 1080
@@ -198,30 +198,12 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
           gap: Math.round(20 * s),
         },
       },
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: starSize,
-            fontWeight: 700,
-          },
-        },
-        "★★★★★"
-      ),
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: bannerFontSize,
-            fontWeight: 700,
-            fontStyle: "italic" as const,
-          },
-        },
-        "Subscribe and Save 20%"
+      ...(bannerText
+        ? [React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(34 * s), fontWeight: 700, fontStyle: "italic" as const } }, bannerText)]
+        : [
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: starSize, fontWeight: 700 } }, "★★★★★"),
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bannerFontSize, fontWeight: 700, fontStyle: "italic" as const } }, "Subscribe and Save 20%")
+          ]
       )
     )
   )

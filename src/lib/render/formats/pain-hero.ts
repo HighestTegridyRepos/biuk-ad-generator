@@ -155,30 +155,12 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
           gap: Math.round(20 * s),
         },
       },
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: bannerStarSize,
-            fontWeight: 700,
-          },
-        },
-        "★★★★★"
-      ),
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: bannerFontSize,
-            fontWeight: 700,
-            fontStyle: "italic" as const,
-          },
-        },
-        bannerText || "Subscribe and Save 20%"
+      ...(bannerText
+        ? [React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(36 * s), fontWeight: 700, fontStyle: "italic" as const } }, bannerText)]
+        : [
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bannerStarSize, fontWeight: 700 } }, "★★★★★"),
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bannerFontSize, fontWeight: 700, fontStyle: "italic" as const } }, "Subscribe and Save 20%")
+          ]
       )
     )
   )

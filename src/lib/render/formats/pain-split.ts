@@ -168,31 +168,12 @@ export const renderPainSplit: FormatRenderer = async (cfg: FormatConfig): Promis
           gap: Math.round(12 * s),
         },
       },
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#000000",
-            fontSize: bannerStarSize,
-            fontWeight: 700,
-          },
-        },
-        "★★★★★"
-      ),
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#000000",
-            fontSize: bannerFontSize,
-            fontWeight: 700,
-            letterSpacing: Math.round(1 * s),
-            textTransform: "uppercase" as const,
-          },
-        },
-        bannerText.replace(/★+/g, "").trim() || "SUBSCRIBE & SAVE 20%"
+      ...(bannerText
+        ? [React.createElement("div", { style: { display: "flex", color: "#000000", fontSize: Math.round(30 * s), fontWeight: 700, textTransform: "uppercase" as const } }, bannerText)]
+        : [
+            React.createElement("div", { style: { display: "flex", color: "#000000", fontSize: bannerStarSize, fontWeight: 700 } }, "★★★★★"),
+            React.createElement("div", { style: { display: "flex", color: "#000000", fontSize: bannerFontSize, fontWeight: 700, letterSpacing: Math.round(1 * s), textTransform: "uppercase" as const } }, "SUBSCRIBE & SAVE 20%")
+          ]
       )
     )
   )

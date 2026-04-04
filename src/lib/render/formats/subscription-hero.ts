@@ -192,29 +192,13 @@ export const renderSubscriptionHero: FormatRenderer = async (cfg: FormatConfig):
           gap: Math.round(20 * s),
         },
       },
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: starSize,
-            fontWeight: 700,
-          },
-        },
-        "★★★★★"
-      ),
-      React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            color: "#FFFFFF",
-            fontSize: bannerFontSize,
-            fontWeight: 700,
-          },
-        },
-        bannerText || "Subscribe and Save 20%"
+      // If bannerText includes stars, render as single element. Otherwise add stars separately.
+      ...(bannerText
+        ? [React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: Math.round(36 * s), fontWeight: 700 } }, bannerText)]
+        : [
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: starSize, fontWeight: 700 } }, "★★★★★"),
+            React.createElement("div", { style: { display: "flex", color: "#FFFFFF", fontSize: bannerFontSize, fontWeight: 700 } }, "Subscribe and Save 20%")
+          ]
       )
     )
   )
