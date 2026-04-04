@@ -76,6 +76,7 @@ interface PipelineRequest {
   backgroundPhoto?: string
   accentText?: { line1: string; line2: string }
   badgeText?: string
+  productCategory?: string  // Scene DNA category key (e.g., "mould-remover", "kitchen-degreaser")
 }
 
 interface HeadlineVariation {
@@ -337,7 +338,7 @@ export async function POST(request: NextRequest) {
         const needsBg = !bgPhoto && !beforePh && !afterPh && (!problemPh || problemPh.length === 0)
         if (needsBg) {
           logInfo(ROUTE_NAME, `Generating AI background images for format: ${format}`)
-          const genImages = await generateFormatImages(format, headlineOverride, body.imageModel as string | undefined)
+          const genImages = await generateFormatImages(format, headlineOverride, body.imageModel as string | undefined, body.productCategory || undefined)
           if (genImages.backgroundPhoto) bgPhoto = bufToDataUrl(genImages.backgroundPhoto)
           if (genImages.beforePhoto) beforePh = bufToDataUrl(genImages.beforePhoto)
           if (genImages.afterPhoto) afterPh = bufToDataUrl(genImages.afterPhoto)

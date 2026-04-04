@@ -24,10 +24,11 @@ export const renderBeforeAfterExtended: FormatRenderer = async (cfg: FormatConfi
   const splitX = Math.round(350 * s)
 
   // Product zone
-  const prodZoneY1 = Math.round(320 * s)
-  const prodZoneY2 = Math.round(890 * s)
+  // Product: 52%W × 62%H per ground truth — centered between header and banner
+  const prodZoneY1 = Math.round(300 * s)
+  const prodZoneY2 = Math.round(970 * s)
   const prodZoneH = prodZoneY2 - prodZoneY1
-  const prodMaxW = Math.round(width * 0.45)
+  const prodMaxW = Math.round(width * 0.55)
 
   // 1. Build backgrounds: cream header + split photo
   const headerBuf = await sharp({

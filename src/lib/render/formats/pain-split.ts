@@ -62,8 +62,9 @@ export const renderPainSplit: FormatRenderer = async (cfg: FormatConfig): Promis
   // 3. Resize product for right column
   const rightColX = leftW
   const rightColW = width - leftW
-  const productMaxH = Math.round(contentH * 0.85)
-  const productMaxW = Math.round(rightColW * 0.95)
+  // Product: ~30%W × 69%H per ground truth, centered in right column
+  const productMaxH = Math.round(contentH * 0.90)
+  const productMaxW = Math.round(rightColW * 0.75)
 
   const prodMeta = await sharp(productImageBuffer).metadata()
   const prodAspect = (prodMeta.height ?? 1) / (prodMeta.width ?? 1)

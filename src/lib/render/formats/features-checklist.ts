@@ -33,10 +33,11 @@ export const renderFeaturesChecklist: FormatRenderer = async (cfg: FormatConfig)
 
   // Product zone: center-right
   const prodXCenter = Math.round(650 * s)
-  const prodZoneY1 = Math.round(400 * s)
-  const prodZoneY2 = Math.round(870 * s)
+  // Product: 30%W × 45%H per ground truth — right side, between header and bottom zone
+  const prodZoneY1 = Math.round(350 * s)
+  const prodZoneY2 = Math.round(860 * s)
   const prodZoneH = prodZoneY2 - prodZoneY1
-  const prodMaxW = Math.round(width * 0.37)
+  const prodMaxW = Math.round(width * 0.35)
 
   // Checklist positions (at 1080 base, scaled)
   const itemYs = [485, 593, 700, 808].map(y => Math.round(y * s))
