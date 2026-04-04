@@ -178,36 +178,54 @@ export async function generateFormatImages(
 
     case "before-after":
     case "before-after-extended": {
-      // Step 1: Generate the dirty "before" scene
-      const beforePrompt = `${scene}. The surface is at its absolute worst — heavily soiled, stained, neglected, years of buildup. ${PHOTO_SPEC}. Portrait 9:16 aspect ratio.`
-      logInfo(MODULE, "Generating BEFORE (dirty) scene...")
-      const beforeBuf = await generateImage(beforePrompt, model)
+      // Strategy: Generate a single split image showing dirty left / clean right,
+      // then cut it in half. This ensures both sides are the SAME scene.
+      logInfo(MODULE, "Generating combined before/after split image...")
+      const splitPrompt = `Create a single photorealistic image showing a dramatic before-and-after cleaning transformation, split vertically down the middle.
+
+LEFT HALF: ${scene}. Heavily soiled, stained, neglected, years of buildup. Disgusting and dirty.
+RIGHT HALF: The EXACT SAME surface, angle, and location — but now perfectly clean, restored, gleaming like new. Spotless condition.
+
+The split should be a sharp vertical line down the center. Both halves must clearly be the same room/surface/angle — the ONLY difference is cleanliness. The transformation should be dramatic and obvious.
+
+${PHOTO_SPEC}. Square 1:1 aspect ratio.`
       
-      if (beforeBuf) {
-        result.beforePhoto = beforeBuf
+      const splitBuf = await generateImage(splitPrompt, model)
+      
+      if (splitBuf) {
+        // Cut the image in half
+        const { default: sharp } = await import("sharp")
+        const meta = await sharp(splitBuf).metadata()
+        const w = meta.width || 1024
+        const h = meta.height || 1024
+        const halfW = Math.floor(w / 2)
         
-        // Step 2: Feed the dirty image BACK to Gemini and ask for clean version
-        logInfo(MODULE, "Generating AFTER (clean) scene from reference image...")
-        const afterPrompt = `IMPORTANT: Edit this EXACT image. Do NOT create a new scene. Keep the EXACT same:
-- Camera angle and perspective
-- Room/location/architecture
-- Wall material, floor material, window frames
-- Lighting direction and color temperature
-- All objects and furniture positions
-
-The ONLY change: remove ALL dirt, mould, grime, stains, algae, discoloration, and buildup. Make every surface spotlessly clean, restored to its original color. Grout should be white, surfaces should gleam, no trace of any contamination remains.
-
-The result should look like a professional before/after comparison where the viewer can tell it is unmistakably the same location.`
-        const afterBuf = await generateImageFromReference(beforeBuf, afterPrompt, model)
-        if (afterBuf) {
-          result.afterPhoto = afterBuf
-        } else {
-          // Fallback: generate independently if image-to-image fails
-          logWarn(MODULE, "Image-to-image failed for AFTER scene, generating independently")
-          const fallbackPrompt = `The exact same type of surface as: ${scene}. But now perfectly clean, restored, and gleaming. Spotless condition. ${PHOTO_SPEC}. Portrait 9:16 aspect ratio.`
-          const fallbackBuf = await generateImage(fallbackPrompt, model)
-          if (fallbackBuf) result.afterPhoto = fallbackBuf
+        try {
+          const leftBuf = await sharp(splitBuf)
+            .extract({ left: 0, top: 0, width: halfW, height: h })
+            .png().toBuffer()
+          const rightBuf = await sharp(splitBuf)
+            .extract({ left: halfW, top: 0, width: w - halfW, height: h })
+            .png().toBuffer()
+          result.beforePhoto = leftBuf
+          result.afterPhoto = rightBuf
+          logInfo(MODULE, `Split image into before (${halfW}x${h}) and after (${w - halfW}x${h})`)
+        } catch (err) {
+          logWarn(MODULE, `Failed to split image: ${(err as Error).message}`)
+          // Fallback: use whole image as before, generate after independently
+          result.beforePhoto = splitBuf
         }
+      } else {
+        // Fallback: generate separately
+        logWarn(MODULE, "Split image failed, generating before/after independently")
+        const beforePrompt = `${scene}. The surface is at its absolute worst. ${PHOTO_SPEC}. Portrait 9:16 aspect ratio.`
+        const afterPrompt = `The same type of surface as: ${scene}. But perfectly clean, restored, gleaming. ${PHOTO_SPEC}. Portrait 9:16 aspect ratio.`
+        const [beforeBuf, afterBuf] = await Promise.all([
+          generateImage(beforePrompt, model),
+          generateImage(afterPrompt, model),
+        ])
+        if (beforeBuf) result.beforePhoto = beforeBuf
+        if (afterBuf) result.afterPhoto = afterBuf
       }
       break
     }
