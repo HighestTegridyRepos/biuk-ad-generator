@@ -70,11 +70,14 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
   }
 
   // Auto-scale: if either line is long, reduce font sizes to prevent wrapping
+  // Scale down aggressively if lines are long to prevent wrapping within a single line element
+  // At 120px Inter-Bold, ~8-9 chars fit in 980px maxWidth. Scale so longest line fits in one visual line.
+  const charsPerLine = 12 // conservative estimate for bold uppercase at base size
   const maxLineLen = Math.max(line1.length, line2.length)
-  const sizeFactor = maxLineLen > 15 ? Math.max(0.6, 15 / maxLineLen) : 1.0
+  const sizeFactor = maxLineLen > charsPerLine ? Math.max(0.5, charsPerLine / maxLineLen) : 1.0
   const line1Size = Math.round(120 * s * sizeFactor)
   const line2Size = Math.round(130 * s * sizeFactor)
-  const bannerFontSize = Math.round(48 * s)
+  const bannerFontSize = Math.round(38 * s)
   const bannerStarSize = Math.round(30 * s)
 
   const overlayEl = React.createElement(
@@ -110,7 +113,7 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
             color: "#FFFFFF",
             fontSize: line1Size,
             fontWeight: 700,
-            lineHeight: 1.0,
+            lineHeight: 1.15,
             textTransform: "uppercase" as const,
             textShadow: `${Math.round(3 * s)}px ${Math.round(3 * s)}px ${Math.round(6 * s)}px rgba(0,0,0,0.6)`,
           },
@@ -126,7 +129,7 @@ export const renderPainHero: FormatRenderer = async (cfg: FormatConfig): Promise
             color: bannerColor,
             fontSize: line2Size,
             fontWeight: 700,
-            lineHeight: 1.0,
+            lineHeight: 1.15,
             textTransform: "uppercase" as const,
             textShadow: `${Math.round(3 * s)}px ${Math.round(3 * s)}px ${Math.round(6 * s)}px rgba(0,0,0,0.6)`,
           },
